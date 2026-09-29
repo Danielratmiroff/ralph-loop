@@ -53,7 +53,6 @@ import {
 import { readStdinText } from "./core/stdin.js";
 import { startSleepPrevention } from "./core/sleep.js";
 import { createAgent } from "./core/agents/factory.js";
-import { getDefaultTelemetry, initDefaultTelemetry } from "./core/telemetry.js";
 import {
   getCommitMessageSchemaFields,
   type CommitMessageConfig,
@@ -172,10 +171,6 @@ function isAgentName(name: string): name is AgentName {
 
 function getNativeAgentName(spec: AgentSpec): AgentName | undefined {
   return isAgentName(spec) ? spec : undefined;
-}
-
-function getTelemetryAgent(spec: AgentSpec): string {
-  return redactAgentSpecForLogs(spec);
 }
 
 function shouldUseColor(): boolean {
@@ -760,15 +755,6 @@ program
         process.exit(1);
       }
 
-      initDefaultTelemetry({
-        app: "gnhf",
-        version: packageVersion,
-        platform: process.platform,
-        arch: process.arch,
-      });
-      const telemetry = getDefaultTelemetry();
-      const runStartedAt = Date.now();
-
       if (!prompt && process.env.GNHF_SLEEP_INHIBITED === "1") {
         prompt = readReexecStdinPrompt(process.env);
       }
@@ -1031,21 +1017,6 @@ program
         }
       }
 
-      const runMode: "new" | "resume" | "worktree" | "current-branch" =
-        options.worktree
-          ? "worktree"
-          : options.currentBranch
-            ? "current-branch"
-            : startIteration > 0
-              ? "resume"
-              : "new";
-
-      const telemetryAgent = getTelemetryAgent(config.agent);
-      telemetry.pageview("/run", {
-        agent: telemetryAgent,
-        mode: runMode,
-      });
-
       initDebugLog(runInfo.logPath);
       appendDebugLog("run:start", {
         args: redactDebugArgs(process.argv.slice(2)),
@@ -1289,33 +1260,6 @@ program
           commitCount: finalState.commitCount,
           worktreePath,
         });
-
-        telemetry.track("run", {
-          agent: telemetryAgent,
-          mode: runMode,
-          status: finalState.status,
-          signal: shutdownSignal ?? undefined,
-          iterations: finalState.currentIteration,
-          success_count: finalState.successCount,
-          fail_count: finalState.failCount,
-          commit_count: finalState.commitCount,
-          total_input_tokens: finalState.totalInputTokens,
-          total_output_tokens: finalState.totalOutputTokens,
-          total_cache_read_tokens: finalState.totalCacheReadTokens,
-          total_cache_creation_tokens: finalState.totalCacheCreationTokens,
-          total_tokens: getTotalTokenCount(
-            finalState.totalInputTokens,
-            finalState.totalOutputTokens,
-            finalState.totalCacheReadTokens,
-            finalState.totalCacheCreationTokens,
-          ),
-          duration_ms: Date.now() - runStartedAt,
-          prevent_sleep: config.preventSleep === true,
-          push_each_iteration: options.push === true,
-          commit_message_preset: effectiveCommitMessage?.preset ?? "default",
-          stop_when_set: effectiveStopWhen !== undefined,
-        });
-        await telemetry.close(1_000);
 
         if (finalState.status === "aborted") {
           console.error(`\n  gnhf: Run log: ${runInfo.logPath}\n`);

@@ -168,7 +168,6 @@ describe.concurrent("gnhf e2e cli", () => {
         ...process.env,
         HOME: home,
         USERPROFILE: home,
-        GNHF_TELEMETRY: "0",
       };
 
       const result = await runCli(

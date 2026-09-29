@@ -39,9 +39,7 @@ More operating systems and more install channels are welcome, and a shipped plat
 ## Nothing identifiable leaves the machine
 
 Prompts, notes, run metadata, and logs live under `.gnhf/runs/` and stay local, so the branch only contains intentional work.
-Telemetry is anonymous, never carrying prompts, paths, or branch names, and a single env var turns it off.
-Richer diagnostics are welcome when they are opt-in, stay anonymous, and change nothing for anyone who does not enable them.
-Raw agent commands are redacted from logs, errors, and telemetry so local paths and secrets are never written out.
+Raw agent commands are redacted from logs and errors so local paths and secrets are never written out.
 Publishing is always an explicit user choice, such as `--push`.
 
 ## Delight is part of the contract

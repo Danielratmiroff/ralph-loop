@@ -78,11 +78,6 @@ interface CliMockOverrides {
   rendererCtor?: ReturnType<typeof vi.fn>;
   startSleepPrevention?: ReturnType<typeof vi.fn>;
   writeRunEndState?: ReturnType<typeof vi.fn>;
-  telemetry?: {
-    track: ReturnType<typeof vi.fn>;
-    pageview: ReturnType<typeof vi.fn>;
-    close: ReturnType<typeof vi.fn>;
-  };
   stdinIsTTY?: boolean;
   consoleErrorSink?: unknown[][];
 }
@@ -119,11 +114,6 @@ async function runCliWithMocks(
   const startSleepPrevention =
     overrides.startSleepPrevention ??
     vi.fn(() => Promise.resolve({ type: "skipped", reason: "unsupported" }));
-  const telemetry = overrides.telemetry ?? {
-    track: vi.fn(),
-    pageview: vi.fn(),
-    close: vi.fn(() => Promise.resolve()),
-  };
   let consoleErrorCalls: unknown[][] = [];
   let stdoutWriteCalls: unknown[][] = [];
   const setupRun = vi.fn(() => stubRunInfo);
@@ -221,10 +211,6 @@ async function runCliWithMocks(
   vi.doMock("./core/sleep.js", () => ({
     startSleepPrevention,
   }));
-  vi.doMock("./core/telemetry.js", () => ({
-    initDefaultTelemetry: vi.fn(),
-    getDefaultTelemetry: vi.fn(() => telemetry),
-  }));
   vi.doMock("./core/orchestrator.js", () => ({
     Orchestrator: class MockOrchestrator {
       constructor(...args: unknown[]) {
@@ -315,7 +301,6 @@ async function runCliWithMocks(
     orchestratorRequestGracefulStop,
     readStdinText,
     startSleepPrevention,
-    telemetry,
   };
 }
 
@@ -785,27 +770,6 @@ describe("cli", () => {
     },
   );
 
-  it("buckets raw ACP command specs in telemetry", async () => {
-    const { telemetry } = await runCliWithMocks(["ship it"], {
-      agent: "acp:./bin/dev-acp --profile ci --token secret",
-      agentPathOverride: {},
-      agentModel: {},
-      agentArgsOverride: {},
-      acpRegistryOverrides: {},
-      maxConsecutiveFailures: 3,
-      preventSleep: false,
-    });
-
-    expect(telemetry.pageview).toHaveBeenCalledWith("/run", {
-      agent: "acp:custom",
-      mode: "new",
-    });
-    expect(telemetry.track).toHaveBeenCalledWith(
-      "run",
-      expect.objectContaining({ agent: "acp:custom" }),
-    );
-  });
-
   it("prints a permanent exit summary after the run completes", async () => {
     const { stdoutWriteCalls } = await runCliWithMocks(
       ["refactor auth flow"],
@@ -858,26 +822,24 @@ describe("cli", () => {
     const writeRunEndState = vi.fn(() => {
       throw new Error("disk full");
     });
-    const { appendDebugLog, stdoutWriteCalls, telemetry } =
-      await runCliWithMocks(
-        ["ship it"],
-        {
-          agent: "claude",
-          agentPathOverride: {},
-          agentModel: {},
-          agentArgsOverride: {},
-          acpRegistryOverrides: {},
-          maxConsecutiveFailures: 3,
-          preventSleep: false,
-        },
-        { writeRunEndState },
-      );
+    const { appendDebugLog, stdoutWriteCalls } = await runCliWithMocks(
+      ["ship it"],
+      {
+        agent: "claude",
+        agentPathOverride: {},
+        agentModel: {},
+        agentArgsOverride: {},
+        acpRegistryOverrides: {},
+        maxConsecutiveFailures: 3,
+        preventSleep: false,
+      },
+      { writeRunEndState },
+    );
 
     expect(writeRunEndState).toHaveBeenCalledWith(
       stubRunInfo,
       expect.any(Object),
     );
-    expect(telemetry.close).toHaveBeenCalledWith(1_000);
     expect(stdoutWriteCalls.map(([chunk]) => String(chunk)).join("")).toContain(
       "gnhf wrapped",
     );

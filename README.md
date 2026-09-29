@@ -340,12 +340,6 @@ Raw ACP command specs are redacted as `acp:custom`/`custom` in debug logs and re
 
 Including a snippet of `gnhf.log` is the single most useful thing you can attach when filing an issue.
 
-## Telemetry
-
-`gnhf` sends anonymous usage telemetry to my self-hosted analytics so I can see what's actually getting used.
-No prompts, repo paths, or branch names are sent.
-Set `GNHF_TELEMETRY=0` to turn it off.
-
 ## Agents
 
 `gnhf` supports seven native agents plus ACP targets. ACP support is powered by [`acpx`](https://github.com/openclaw/acpx), which is bundled with `gnhf` and provides the runtime and agent registry for `acp:<target-or-command>` specs.

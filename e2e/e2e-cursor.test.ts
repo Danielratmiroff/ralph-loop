@@ -140,7 +140,6 @@ function createCursorEnv(
     ...sanitizedGitEnv,
     HOME: home,
     USERPROFILE: home,
-    GNHF_TELEMETRY: "0",
     GNHF_MOCK_CURSOR_LOG_PATH: options.mockLogPath,
   };
 }
