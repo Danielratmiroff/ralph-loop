@@ -34,7 +34,7 @@ function emitJson(proc: ReturnType<typeof createMockProcess>, event: unknown) {
 }
 
 function withTemporaryPath(candidates: string[], callback: () => void): void {
-  const directory = mkdtempSync(join(tmpdir(), "gnhf-cursor-path-"));
+  const directory = mkdtempSync(join(tmpdir(), "ralphloop-cursor-path-"));
   const originalPath = process.env.PATH;
   try {
     for (const candidate of candidates) {
@@ -138,7 +138,7 @@ describe("CursorAgent", () => {
       expect.stringContaining("test prompt"),
     );
     expect(proc.stdin.write).toHaveBeenCalledWith(
-      expect.stringContaining("gnhf final output contract"),
+      expect.stringContaining("ralphloop final output contract"),
     );
     expect(proc.stdin.end).toHaveBeenCalled();
   });

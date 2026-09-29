@@ -35,9 +35,9 @@ const MOONS_PER_ROW = 30;
 const MOON_PHASE_PERIOD = 1600;
 const MAX_MSG_LINES = 3;
 const MAX_MSG_LINE_LEN = CONTENT_WIDTH;
-const RESUME_HINT = "[ctrl+c to stop, gnhf again to resume]";
+const RESUME_HINT = "[ctrl+c to stop, ralphloop again to resume]";
 const GRACEFUL_STOP_HINT =
-  "[graceful stop requested, ctrl+c again to force stop, gnhf again to resume]";
+  "[graceful stop requested, ctrl+c again to force stop, ralphloop again to resume]";
 const DONE_HINT = "[ctrl+c to exit]";
 
 export type RendererExitReason = "interrupted" | "stopped";
@@ -85,7 +85,7 @@ function buildTerminalTitle(state: OrchestratorState, now: number): string {
       ? getMoonPhase("active", now, MOON_PHASE_PERIOD)
       : state.status;
   return (
-    `gnhf ${lead}` +
+    `ralphloop ${lead}` +
     ` · ${formatTokenCount(totalTokens, "total", state.tokensEstimated)}` +
     ` · ${formatTokenCount(state.totalInputTokens, "in", state.tokensEstimated)}` +
     ` · ${formatTokenCount(state.totalOutputTokens, "out", state.tokensEstimated)}` +
@@ -107,7 +107,7 @@ function restoreTerminalTitle(): string {
 
 function eyebrowSegments(agentName: string): string[] {
   // Render "acp:<target>" as two segments separated by the same dot used
-  // between "gnhf" and the agent name: "g n h f \u00b7 a c p \u00b7 claude".
+  // between "ralphloop" and the agent name: "r a l p h l o o p \u00b7 a c p \u00b7 claude".
   if (agentName.startsWith("acp:")) {
     const target = agentName.slice("acp:".length);
     if (target.length > 0) return ["acp", target];
@@ -123,7 +123,7 @@ export function renderTitleCells(agentName?: string): Cell[][] {
     ...textToCells("  ", "normal"),
   ];
   const eyebrow: Cell[] = [
-    ...textToCells(spacedLabel("gnhf"), "dim"),
+    ...textToCells(spacedLabel("ralphloop"), "dim"),
     ...segments.flatMap((segment) => [
       ...separator,
       ...textToCells(spacedLabel(segment), "dim"),
@@ -133,18 +133,9 @@ export function renderTitleCells(agentName?: string): Cell[][] {
   return [
     eyebrow,
     [],
-    textToCells(
-      "┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻",
-      "bold",
-    ),
-    textToCells(
-      "┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫",
-      "bold",
-    ),
-    textToCells(
-      "┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹",
-      "bold",
-    ),
+    textToCells("┏━┓┏━┓╻  ┏━┓╻ ╻   ╻  ┏━┓┏━┓┏━┓", "bold"),
+    textToCells("┣┳┛┣━┫┃  ┣━┛┣━┫   ┃  ┃ ┃┃ ┃┣━┛", "bold"),
+    textToCells("╹┗╸╹ ╹┗━╸╹  ╹ ╹   ┗━╸┗━┛┗━┛╹", "bold"),
   ];
 }
 
@@ -879,7 +870,7 @@ export class Renderer {
       // Clear the custom title first, then attempt the xterm stack restore.
       // Many modern terminals (iTerm2, macOS Terminal, Alacritty, Ghostty)
       // ignore the title save/restore stack, so without the explicit clear
-      // our "gnhf · ..." title would persist after exit.
+      // our "ralphloop · ..." title would persist after exit.
       process.stdout.write(emitTerminalTitle("") + restoreTerminalTitle());
       this.titleSaved = false;
       this.prevTitle = null;

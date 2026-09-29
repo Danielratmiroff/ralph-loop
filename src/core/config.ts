@@ -233,7 +233,7 @@ function isReservedAgentArg(agent: AgentName, arg: string): boolean {
 }
 
 /**
- * Resolve a user-supplied path against the config directory (~/.gnhf).
+ * Resolve a user-supplied path against the config directory (~/.ralphloop).
  * Expands leading `~` or `~/` to the home directory, then resolves relative
  * paths against `baseDir` so that entries like `./bin/codex` work predictably
  * regardless of the repo's cwd. Bare executable names and absolute paths pass
@@ -324,13 +324,13 @@ function normalizeAgentExtraArgs(
 
     if (agent === "opencode" && isOpencodeModelArg(trimmed)) {
       throw new InvalidConfigError(
-        `Invalid config value for ${label}[${index}]: "${trimmed}" sets the model, which gnhf sends in the opencode request body. Use --model or agentModel.opencode instead.`,
+        `Invalid config value for ${label}[${index}]: "${trimmed}" sets the model, which ralphloop sends in the opencode request body. Use --model or agentModel.opencode instead.`,
       );
     }
 
     if (isReservedAgentArg(agent, trimmed)) {
       throw new InvalidConfigError(
-        `Invalid config value for ${label}[${index}]: "${trimmed}" is managed by gnhf and cannot be overridden`,
+        `Invalid config value for ${label}[${index}]: "${trimmed}" is managed by ralphloop and cannot be overridden`,
       );
     }
 
@@ -479,7 +479,7 @@ function normalizeConfig(
     "agentPathOverride",
   );
   if (hasAgentPathOverride) {
-    const resolveDir = configDir ?? join(homedir(), ".gnhf");
+    const resolveDir = configDir ?? join(homedir(), ".ralphloop");
     const agentPathOverride = normalizeAgentPathOverride(
       config.agentPathOverride,
       resolveDir,
@@ -716,7 +716,7 @@ function serializeConfig(config: Config): string {
 }
 
 export function loadConfig(overrides?: Partial<Config>): Config {
-  const configDir = join(homedir(), ".gnhf");
+  const configDir = join(homedir(), ".ralphloop");
   const configPath = join(configDir, "config.yml");
   let fileConfig: Partial<Config> = {};
   let shouldBootstrapConfig = false;

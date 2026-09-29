@@ -473,7 +473,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
           // usage instead of rejecting. This iteration's work is already
           // committed, so keep it and wait for the reset rather than buying
           // the next one. Deciding here, after the post-iteration checks but
-          // before any backoff of gnhf's own, means a run that was going to
+          // before any backoff of ralphloop's own, means a run that was going to
           // stop anyway never sleeps first and a pause we choose to take can
           // never consume a reset time that was usable when it arrived.
           // A reset time that has already elapsed says the included window is
@@ -829,7 +829,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
 
 ## Previous Commit Failure
 
-The previous iteration made workspace changes, but gnhf could not commit them because git commit failed.
+The previous iteration made workspace changes, but ralphloop could not commit them because git commit failed.
 Do not start unrelated work.
 Inspect and fix the existing uncommitted changes so the commit can pass, then report success.
 

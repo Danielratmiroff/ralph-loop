@@ -178,7 +178,7 @@ describe("startSleepPrevention", () => {
       expect.objectContaining({
         detached: true,
         stdio: "inherit",
-        env: expect.objectContaining({ GNHF_SLEEP_INHIBITED: "1" }),
+        env: expect.objectContaining({ RALPHLOOP_SLEEP_INHIBITED: "1" }),
       }),
     );
     expect(result).toEqual({ type: "reexeced", exitCode: 0 });
@@ -235,7 +235,7 @@ describe("startSleepPrevention", () => {
       processArgv1: "/dist/cli.mjs",
       processExecPath: "/node",
       reexecEnv: {
-        GNHF_REEXEC_STDIN_PROMPT: "objective from stdin",
+        RALPHLOOP_REEXEC_STDIN_PROMPT: "objective from stdin",
       },
     });
 
@@ -244,8 +244,8 @@ describe("startSleepPrevention", () => {
       expect.any(Array),
       expect.objectContaining({
         env: expect.objectContaining({
-          GNHF_REEXEC_STDIN_PROMPT: "objective from stdin",
-          GNHF_SLEEP_INHIBITED: "1",
+          RALPHLOOP_REEXEC_STDIN_PROMPT: "objective from stdin",
+          RALPHLOOP_SLEEP_INHIBITED: "1",
         }),
       }),
     );
@@ -273,14 +273,14 @@ describe("startSleepPrevention", () => {
   });
 
   it("signals readiness when running inside the re-execed Linux process", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "gnhf-sleep-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "ralphloop-sleep-"));
     const readyPath = join(tempDir, "reexec-ready");
 
     try {
       const result = await startSleepPrevention(["ship it"], {
         env: {
-          GNHF_SLEEP_INHIBITED: "1",
-          GNHF_SLEEP_REEXEC_READY_PATH: readyPath,
+          RALPHLOOP_SLEEP_INHIBITED: "1",
+          RALPHLOOP_SLEEP_REEXEC_READY_PATH: readyPath,
         },
         platform: "linux",
       });
@@ -293,15 +293,15 @@ describe("startSleepPrevention", () => {
   });
 
   it("does not overwrite an untrusted readiness path from the environment", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "gnhf-sleep-test-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "ralphloop-sleep-test-"));
     const victimPath = join(tempDir, "victim.txt");
     writeFileSync(victimPath, "do not touch", "utf-8");
 
     try {
       const result = await startSleepPrevention(["ship it"], {
         env: {
-          GNHF_SLEEP_INHIBITED: "1",
-          GNHF_SLEEP_REEXEC_READY_PATH: victimPath,
+          RALPHLOOP_SLEEP_INHIBITED: "1",
+          RALPHLOOP_SLEEP_REEXEC_READY_PATH: victimPath,
         },
         platform: "linux",
       });
@@ -347,7 +347,7 @@ describe("startSleepPrevention", () => {
 
     const child = createChildProcess();
     mockSpawn.mockImplementation((_, __, options) => {
-      const readyPath = options?.env?.GNHF_SLEEP_REEXEC_READY_PATH;
+      const readyPath = options?.env?.RALPHLOOP_SLEEP_REEXEC_READY_PATH;
 
       expect(readyPath).toEqual(expect.any(String));
 
@@ -385,7 +385,7 @@ describe("startSleepPrevention", () => {
 
     const child = createChildProcess();
     mockSpawn.mockImplementation((_, __, options) => {
-      const readyPath = options?.env?.GNHF_SLEEP_REEXEC_READY_PATH;
+      const readyPath = options?.env?.RALPHLOOP_SLEEP_REEXEC_READY_PATH;
 
       expect(readyPath).toEqual(expect.any(String));
 
@@ -430,7 +430,7 @@ describe("startSleepPrevention", () => {
     });
     const processOff = vi.fn(() => process);
     mockSpawn.mockImplementation((_, __, options) => {
-      const readyPath = options?.env?.GNHF_SLEEP_REEXEC_READY_PATH;
+      const readyPath = options?.env?.RALPHLOOP_SLEEP_REEXEC_READY_PATH;
 
       queueMicrotask(() => {
         child.emit("spawn");
@@ -569,7 +569,7 @@ describe("startSleepPrevention", () => {
     mockSpawn.mockImplementation(() => {
       queueMicrotask(() => {
         child.emit("spawn");
-        child.stdout?.push("gnhf-sleep-ready\n");
+        child.stdout?.push("ralphloop-sleep-ready\n");
       });
       return child as never;
     });
@@ -618,13 +618,13 @@ describe("startSleepPrevention", () => {
     expect(result.type).toBe("active");
     if (result.type !== "active") return;
 
-    child.stdout?.push("gnhf-sleep-ready\n");
+    child.stdout?.push("ralphloop-sleep-ready\n");
     await expect(result.confirmed).resolves.toBe(true);
   });
 
   it("records the Windows helper's stderr when it exits before reporting ready", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "gnhf-sleep-"));
-    const logPath = join(tempDir, "gnhf.log");
+    const tempDir = mkdtempSync(join(tmpdir(), "ralphloop-sleep-"));
+    const logPath = join(tempDir, "ralphloop.log");
     initDebugLog(logPath);
 
     const child = createWindowsChildProcess();
@@ -674,8 +674,8 @@ describe("startSleepPrevention", () => {
 
   it("reports the Windows helper as unconfirmed when it never reports ready", async () => {
     vi.useFakeTimers();
-    const tempDir = mkdtempSync(join(tmpdir(), "gnhf-sleep-"));
-    const logPath = join(tempDir, "gnhf.log");
+    const tempDir = mkdtempSync(join(tmpdir(), "ralphloop-sleep-"));
+    const logPath = join(tempDir, "ralphloop.log");
     initDebugLog(logPath);
 
     const child = createWindowsChildProcess();
@@ -733,7 +733,7 @@ describe("startSleepPrevention", () => {
     if (result.type !== "active") return;
 
     await vi.advanceTimersByTimeAsync(15_000);
-    child.stdout?.push("gnhf-sleep-ready\n");
+    child.stdout?.push("ralphloop-sleep-ready\n");
     await vi.advanceTimersByTimeAsync(0);
 
     await expect(result.confirmed).resolves.toBe(true);

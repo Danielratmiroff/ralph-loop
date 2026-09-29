@@ -65,7 +65,7 @@ describe("setupRun", () => {
       recursive: true,
     });
     expect(mockMkdirSync).toHaveBeenCalledWith(
-      join(P, ".gnhf", "runs", "test-run-1"),
+      join(P, ".ralphloop", "runs", "test-run-1"),
       { recursive: true },
     );
   });
@@ -75,7 +75,7 @@ describe("setupRun", () => {
 
     expect(mockWriteFileSync).toHaveBeenCalledWith(
       join(P, ".git", "info", "exclude"),
-      ".gnhf/runs/\n",
+      ".ralphloop/runs/\n",
       "utf-8",
     );
   });
@@ -85,7 +85,7 @@ describe("setupRun", () => {
       includeStopField: false,
     });
     expect(mockWriteFileSync).toHaveBeenCalledWith(
-      join(P, ".gnhf", "runs", "run-abc", "prompt.md"),
+      join(P, ".ralphloop", "runs", "run-abc", "prompt.md"),
       "improve coverage",
       "utf-8",
     );
@@ -100,8 +100,8 @@ describe("setupRun", () => {
     );
     expect(notesCall).toBeDefined();
     const content = notesCall![1] as string;
-    expect(content).toContain("# gnhf run: run-abc");
-    expect(content).toContain(".gnhf/runs/run-abc/prompt.md");
+    expect(content).toContain("# ralphloop run: run-abc");
+    expect(content).toContain(".ralphloop/runs/run-abc/prompt.md");
     expect(content).not.toContain("improve coverage");
     expect(content).toContain("## Iteration Log");
   });
@@ -170,7 +170,7 @@ describe("setupRun", () => {
     setupRun("run-abc", "test", "abc123", P, { includeStopField: false });
 
     expect(mockWriteFileSync).toHaveBeenCalledWith(
-      join(P, ".gnhf", "runs", "run-abc", "base-commit"),
+      join(P, ".ralphloop", "runs", "run-abc", "base-commit"),
       "abc123\n",
       "utf-8",
     );
@@ -183,7 +183,7 @@ describe("setupRun", () => {
     });
 
     expect(mockWriteFileSync).toHaveBeenCalledWith(
-      join(P, ".gnhf", "runs", "run-abc", "stop-when"),
+      join(P, ".ralphloop", "runs", "run-abc", "stop-when"),
       "all tests pass\n",
       "utf-8",
     );
@@ -193,7 +193,7 @@ describe("setupRun", () => {
     setupRun("run-abc", "test", "abc123", P, { includeStopField: false });
 
     expect(mockWriteFileSync).not.toHaveBeenCalledWith(
-      join(P, ".gnhf", "runs", "run-abc", "stop-when"),
+      join(P, ".ralphloop", "runs", "run-abc", "stop-when"),
       expect.any(String),
       "utf-8",
     );
@@ -203,7 +203,7 @@ describe("setupRun", () => {
     setupRun("run-abc", "test", "abc123", P, { includeStopField: false });
 
     expect(mockWriteFileSync).toHaveBeenCalledWith(
-      join(P, ".gnhf", "runs", "run-abc", "commit-message"),
+      join(P, ".ralphloop", "runs", "run-abc", "commit-message"),
       "default\n",
       "utf-8",
     );
@@ -220,14 +220,20 @@ describe("setupRun", () => {
     });
 
     expect(mockWriteFileSync).toHaveBeenCalledWith(
-      join(P, ".gnhf", "runs", "run-abc", "commit-message"),
+      join(P, ".ralphloop", "runs", "run-abc", "commit-message"),
       "conventional\n",
       "utf-8",
     );
   });
 
   it("preserves the existing branch base commit on overwrite", () => {
-    const baseCommitPath = join(P, ".gnhf", "runs", "run-abc", "base-commit");
+    const baseCommitPath = join(
+      P,
+      ".ralphloop",
+      "runs",
+      "run-abc",
+      "base-commit",
+    );
     mockExistsSync.mockImplementation((path) => path === baseCommitPath);
     mockReadFileSync.mockImplementation((path) =>
       path === baseCommitPath ? "old123\n" : "",
@@ -243,7 +249,7 @@ describe("setupRun", () => {
   });
 
   it("preserves the existing notes.md on overwrite so prior iteration log survives", () => {
-    const notesPath = join(P, ".gnhf", "runs", "run-abc", "notes.md");
+    const notesPath = join(P, ".ralphloop", "runs", "run-abc", "notes.md");
     mockExistsSync.mockImplementation((path) => path === notesPath);
 
     setupRun("run-abc", "new prompt", "abc123", P, { includeStopField: false });
@@ -255,20 +261,20 @@ describe("setupRun", () => {
   });
 
   it("still overwrites prompt.md on overwrite so the new prompt takes effect", () => {
-    const notesPath = join(P, ".gnhf", "runs", "run-abc", "notes.md");
+    const notesPath = join(P, ".ralphloop", "runs", "run-abc", "notes.md");
     mockExistsSync.mockImplementation((path) => path === notesPath);
 
     setupRun("run-abc", "new prompt", "abc123", P, { includeStopField: false });
 
     expect(mockWriteFileSync).toHaveBeenCalledWith(
-      join(P, ".gnhf", "runs", "run-abc", "prompt.md"),
+      join(P, ".ralphloop", "runs", "run-abc", "prompt.md"),
       "new prompt",
       "utf-8",
     );
   });
 
   it("returns correct RunInfo paths", () => {
-    const runDir = join(P, ".gnhf", "runs", "my-run");
+    const runDir = join(P, ".ralphloop", "runs", "my-run");
     const info = setupRun("my-run", "prompt text", "abc123", P, {
       includeStopField: false,
     });
@@ -278,7 +284,7 @@ describe("setupRun", () => {
       promptPath: join(runDir, "prompt.md"),
       notesPath: join(runDir, "notes.md"),
       schemaPath: join(runDir, "output-schema.json"),
-      logPath: join(runDir, "gnhf.log"),
+      logPath: join(runDir, "ralphloop.log"),
       baseCommit: "abc123",
       baseCommitPath: join(runDir, "base-commit"),
       stopWhenPath: join(runDir, "stop-when"),
@@ -306,7 +312,7 @@ describe("writeRunEndState", () => {
 
     const call = mockWriteFileSync.mock.calls.find(
       ([path]) =>
-        path === join(P, ".gnhf", "runs", "run-abc", "end-state.json"),
+        path === join(P, ".ralphloop", "runs", "run-abc", "end-state.json"),
     );
     expect(call).toBeDefined();
     expect(JSON.parse(call![1] as string)).toMatchObject({
@@ -327,7 +333,7 @@ describe("resumeRun", () => {
   });
 
   it("refreshes output-schema.json to the current JSON schema", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     mockExistsSync.mockImplementation((path) => path === runDir);
 
     resumeRun("run-abc", P, { includeStopField: false });
@@ -348,7 +354,7 @@ describe("resumeRun", () => {
   });
 
   it("rewrites output-schema.json with should_fully_stop when includeStopField is true", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     mockExistsSync.mockImplementation((path) => path === runDir);
 
     resumeRun("run-abc", P, { includeStopField: true });
@@ -363,7 +369,7 @@ describe("resumeRun", () => {
   });
 
   it("reads the stored base commit when present", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     const baseCommitPath = join(runDir, "base-commit");
     mockExistsSync.mockImplementation(
       (path) => path === runDir || path === baseCommitPath,
@@ -375,11 +381,11 @@ describe("resumeRun", () => {
     const info = resumeRun("run-abc", P, { includeStopField: false });
 
     expect(info.baseCommit).toBe("abc123");
-    expect(info.logPath).toBe(join(runDir, "gnhf.log"));
+    expect(info.logPath).toBe(join(runDir, "ralphloop.log"));
   });
 
   it("reads the stored stop-when condition when present", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     const stopWhenPath = join(runDir, "stop-when");
     mockExistsSync.mockImplementation(
       (path) => path === runDir || path === stopWhenPath,
@@ -395,7 +401,7 @@ describe("resumeRun", () => {
   });
 
   it("returns undefined for stop-when when the file is missing", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     mockExistsSync.mockImplementation((path) => path === runDir);
 
     const info = resumeRun("run-abc", P, { includeStopField: false });
@@ -404,7 +410,7 @@ describe("resumeRun", () => {
   });
 
   it("uses stored default commit message metadata on resume even when live config is conventional", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     const commitMessagePath = join(runDir, "commit-message");
     mockExistsSync.mockImplementation(
       (path) => path === runDir || path === commitMessagePath,
@@ -434,7 +440,7 @@ describe("resumeRun", () => {
   });
 
   it("uses stored conventional commit message metadata on resume even when live config is default", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     const commitMessagePath = join(runDir, "commit-message");
     mockExistsSync.mockImplementation(
       (path) => path === runDir || path === commitMessagePath,
@@ -456,7 +462,7 @@ describe("resumeRun", () => {
   });
 
   it("backfills missing commit message metadata from an existing conventional schema", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     const schemaPath = join(runDir, "output-schema.json");
     const commitMessagePath = join(runDir, "commit-message");
     mockExistsSync.mockImplementation(
@@ -484,7 +490,7 @@ describe("resumeRun", () => {
   });
 
   it("backfills missing base-commit for legacy runs", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     mockExistsSync.mockImplementation((path) => path === runDir);
     mockFindLegacyRunBaseCommit.mockReturnValue("legacy123");
 
@@ -500,7 +506,7 @@ describe("resumeRun", () => {
   });
 
   it("falls back to HEAD when a legacy run has no recoverable base commit", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     mockExistsSync.mockImplementation((path) => path === runDir);
     mockFindLegacyRunBaseCommit.mockReturnValue(null);
     mockGetHeadCommit.mockReturnValue("head456");
@@ -518,7 +524,7 @@ describe("peekRunMetadata", () => {
   });
 
   it("reads stored commit message metadata without writing files", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     const commitMessagePath = join(runDir, "commit-message");
     mockExistsSync.mockImplementation(
       (path) => path === runDir || path === commitMessagePath,
@@ -535,7 +541,7 @@ describe("peekRunMetadata", () => {
   });
 
   it("infers legacy conventional metadata from the schema without backfilling", () => {
-    const runDir = join(P, ".gnhf", "runs", "run-abc");
+    const runDir = join(P, ".ralphloop", "runs", "run-abc");
     const schemaPath = join(runDir, "output-schema.json");
     const commitMessagePath = join(runDir, "commit-message");
     mockExistsSync.mockImplementation(
@@ -642,7 +648,7 @@ describe("toStringArray", () => {
 
 describe("getCompletedIterationCount", () => {
   const runInfo = {
-    logPath: "/repo/.gnhf/runs/run-abc/gnhf.log",
+    logPath: "/repo/.ralphloop/runs/run-abc/ralphloop.log",
   } as Parameters<typeof getCompletedIterationCount>[0];
 
   afterEach(() => {

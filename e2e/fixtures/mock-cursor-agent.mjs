@@ -5,7 +5,7 @@ import { join } from "node:path";
 import process from "node:process";
 
 function appendLog(details) {
-  const logPath = process.env.GNHF_MOCK_CURSOR_LOG_PATH;
+  const logPath = process.env.RALPHLOOP_MOCK_CURSOR_LOG_PATH;
   if (!logPath) return;
   appendFileSync(
     logPath,
@@ -37,7 +37,7 @@ appendLog({
   event: "spawn",
   argv,
   cwd: process.cwd(),
-  hasSchemaContract: stdin.includes("gnhf final output contract"),
+  hasSchemaContract: stdin.includes("ralphloop final output contract"),
   stdinHasObjective: stdin.includes("add a hello.txt via cursor agent"),
   stdinLen: stdin.length,
 });

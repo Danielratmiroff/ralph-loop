@@ -21,7 +21,7 @@ const mockReadFileSync = vi.mocked(readFileSync);
 const mockWriteFileSync = vi.mocked(writeFileSync);
 
 const HOME = "/mock-home";
-const CONFIG_DIR = join(HOME, ".gnhf");
+const CONFIG_DIR = join(HOME, ".ralphloop");
 const CONFIG_PATH = join(CONFIG_DIR, "config.yml");
 // Golden copy of the bootstrap template written on first run. Read via
 // node:fs/promises because node:fs is mocked in this file. README's
@@ -175,7 +175,7 @@ describe("loadConfig", () => {
     });
   });
 
-  it("reads config from ~/.gnhf/config.yml", () => {
+  it("reads config from ~/.ralphloop/config.yml", () => {
     mockReadFileSync.mockReturnValue("agent: codex\n");
 
     const config = loadConfig();
@@ -441,7 +441,7 @@ describe("loadConfig", () => {
     );
 
     expect(() => loadConfig()).toThrow(
-      /agentArgsOverride\.pi\[0\].*managed by gnhf/,
+      /agentArgsOverride\.pi\[0\].*managed by ralphloop/,
     );
   });
 
@@ -563,7 +563,7 @@ describe("loadConfig", () => {
       );
 
       expect(() => loadConfig()).toThrow(
-        /agentArgsOverride\.cursor\[0\].*managed by gnhf/,
+        /agentArgsOverride\.cursor\[0\].*managed by ralphloop/,
       );
     },
   );

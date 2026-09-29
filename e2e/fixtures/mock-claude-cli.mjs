@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Stands in for the `claude` CLI. GNHF_MOCK_CLAUDE_MODE picks the stream
+// Stands in for the `claude` CLI. RALPHLOOP_MOCK_CLAUDE_MODE picks the stream
 // shape, so one fixture covers every combination: the failure shapes the error
 // paths need, plus successful runs that first announce the included usage
 // window is spent and requests are being billed to extra usage.
@@ -10,7 +10,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 
-const mode = process.env.GNHF_MOCK_CLAUDE_MODE ?? "stdout-error";
+const mode = process.env.RALPHLOOP_MOCK_CLAUDE_MODE ?? "stdout-error";
 
 if (mode === "no-output") {
   process.exit(1);

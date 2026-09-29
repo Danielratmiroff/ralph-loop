@@ -72,10 +72,10 @@ const packageVersion = JSON.parse(
 ).version as string;
 const FORCE_EXIT_TIMEOUT_MS = 5_000;
 const MAX_METEOR_FREQUENCY = 5;
-const GNHF_REEXEC_STDIN_PROMPT = "GNHF_REEXEC_STDIN_PROMPT";
-const GNHF_REEXEC_STDIN_PROMPT_FILE = "GNHF_REEXEC_STDIN_PROMPT_FILE";
-const GNHF_REEXEC_STDIN_PROMPT_DIR_PREFIX = "gnhf-stdin-";
-const GNHF_REEXEC_STDIN_PROMPT_FILENAME = "prompt.txt";
+const RALPHLOOP_REEXEC_STDIN_PROMPT = "RALPHLOOP_REEXEC_STDIN_PROMPT";
+const RALPHLOOP_REEXEC_STDIN_PROMPT_FILE = "RALPHLOOP_REEXEC_STDIN_PROMPT_FILE";
+const RALPHLOOP_REEXEC_STDIN_PROMPT_DIR_PREFIX = "ralphloop-stdin-";
+const RALPHLOOP_REEXEC_STDIN_PROMPT_FILENAME = "prompt.txt";
 const AGENT_NAME_SET = new Set<string>(AGENT_NAMES);
 const AGENT_NAME_LIST = `"${AGENT_NAMES.slice(0, -1).join('", "')}", or "${
   AGENT_NAMES[AGENT_NAMES.length - 1]
@@ -267,7 +267,7 @@ function resumeCurrentBranchRun(
   schemaOptions: RunSchemaOptions,
 ): RunInfo | null {
   const runId = promptRunId(prompt);
-  if (!existsSync(join(cwd, ".gnhf", "runs", runId))) {
+  if (!existsSync(join(cwd, ".ralphloop", "runs", runId))) {
     return null;
   }
   ensureCleanWorkingTree(cwd);
@@ -314,7 +314,7 @@ function runIdWithSuffix(runId: string, suffix: number): string {
 function createRunIdWithSuffix(runId: string, cwd: string): string {
   for (let suffix = 0; suffix < 100; suffix += 1) {
     const candidate = runIdWithSuffix(runId, suffix);
-    if (!existsSync(join(cwd, ".gnhf", "runs", candidate))) {
+    if (!existsSync(join(cwd, ".ralphloop", "runs", candidate))) {
       return candidate;
     }
   }
@@ -341,7 +341,7 @@ function initializeWorktreeRun(
   const baseCommit = getHeadCommit(cwd);
   const branchName = slugifyPrompt(prompt);
   const makeWorktreePath = (runId: string) =>
-    join(dirname(repoRoot), `${basename(repoRoot)}-gnhf-worktrees`, runId);
+    join(dirname(repoRoot), `${basename(repoRoot)}-ralphloop-worktrees`, runId);
   const runId = branchName.split("/")[1]!;
   const worktreePath = makeWorktreePath(runId);
   const registeredWorktreePaths = listWorktreePaths(repoRoot);
@@ -353,7 +353,9 @@ function initializeWorktreeRun(
   ): WorktreeRunResult | null => {
     if (
       !registeredWorktreePaths.has(resolve(candidateWorktreePath)) ||
-      !existsSync(join(candidateWorktreePath, ".gnhf", "runs", candidateRunId))
+      !existsSync(
+        join(candidateWorktreePath, ".ralphloop", "runs", candidateRunId),
+      )
     ) {
       return null;
     }
@@ -532,9 +534,9 @@ function persistStdinPromptForReexec(prompt: string): {
   cleanup: () => void;
 } {
   const promptDir = mkdtempSync(
-    join(tmpdir(), GNHF_REEXEC_STDIN_PROMPT_DIR_PREFIX),
+    join(tmpdir(), RALPHLOOP_REEXEC_STDIN_PROMPT_DIR_PREFIX),
   );
-  const promptPath = join(promptDir, GNHF_REEXEC_STDIN_PROMPT_FILENAME);
+  const promptPath = join(promptDir, RALPHLOOP_REEXEC_STDIN_PROMPT_FILENAME);
   writeFileSync(promptPath, prompt, { encoding: "utf-8", mode: 0o600 });
   return {
     path: promptPath,
@@ -548,9 +550,9 @@ function isTrustedReexecPromptPath(promptPath: string): boolean {
   const resolvedPromptPath = resolve(promptPath);
   const promptDir = dirname(resolvedPromptPath);
   return (
-    basename(resolvedPromptPath) === GNHF_REEXEC_STDIN_PROMPT_FILENAME &&
+    basename(resolvedPromptPath) === RALPHLOOP_REEXEC_STDIN_PROMPT_FILENAME &&
     dirname(promptDir) === resolve(tmpdir()) &&
-    basename(promptDir).startsWith(GNHF_REEXEC_STDIN_PROMPT_DIR_PREFIX)
+    basename(promptDir).startsWith(RALPHLOOP_REEXEC_STDIN_PROMPT_DIR_PREFIX)
   );
 }
 
@@ -569,9 +571,9 @@ function cleanupTrustedReexecPromptPath(promptPath: string): void {
 }
 
 function readReexecStdinPrompt(env: NodeJS.ProcessEnv): string | undefined {
-  const promptPath = env[GNHF_REEXEC_STDIN_PROMPT_FILE];
+  const promptPath = env[RALPHLOOP_REEXEC_STDIN_PROMPT_FILE];
   if (promptPath !== undefined) {
-    delete env[GNHF_REEXEC_STDIN_PROMPT_FILE];
+    delete env[RALPHLOOP_REEXEC_STDIN_PROMPT_FILE];
     try {
       return readFileSync(promptPath, "utf-8");
     } finally {
@@ -579,9 +581,9 @@ function readReexecStdinPrompt(env: NodeJS.ProcessEnv): string | undefined {
     }
   }
 
-  const prompt = env[GNHF_REEXEC_STDIN_PROMPT];
+  const prompt = env[RALPHLOOP_REEXEC_STDIN_PROMPT];
   if (prompt !== undefined) {
-    delete env[GNHF_REEXEC_STDIN_PROMPT];
+    delete env[RALPHLOOP_REEXEC_STDIN_PROMPT];
     return prompt;
   }
 
@@ -591,7 +593,7 @@ function readReexecStdinPrompt(env: NodeJS.ProcessEnv): string | undefined {
 const program = new Command();
 
 program
-  .name("gnhf")
+  .name("rl")
   .description("Before I go to bed, I tell my agents: good night, have fun")
   .version(packageVersion)
   .argument("[prompt]", "The objective for the coding agent")
@@ -639,7 +641,7 @@ program
   )
   .option(
     "--current-branch",
-    "Run on the current branch instead of creating a gnhf branch",
+    "Run on the current branch instead of creating a ralphloop branch",
     false,
   )
   .option(
@@ -694,7 +696,7 @@ program
       let initialSleepPrevention: Awaited<
         ReturnType<typeof startSleepPrevention>
       > | null = null;
-      if (process.env.GNHF_SLEEP_INHIBITED === "1") {
+      if (process.env.RALPHLOOP_SLEEP_INHIBITED === "1") {
         initialSleepPrevention = await startSleepPrevention(
           process.argv.slice(2),
         );
@@ -755,7 +757,7 @@ program
         process.exit(1);
       }
 
-      if (!prompt && process.env.GNHF_SLEEP_INHIBITED === "1") {
+      if (!prompt && process.env.RALPHLOOP_SLEEP_INHIBITED === "1") {
         prompt = readReexecStdinPrompt(process.env);
       }
       if (!prompt && !process.stdin.isTTY) {
@@ -785,7 +787,7 @@ program
       };
 
       const currentBranch = getCurrentBranch(cwd);
-      const onGnhfBranch = currentBranch.startsWith("gnhf/");
+      const onRalphloopBranch = currentBranch.startsWith("ralphloop/");
 
       if (options.currentBranch && options.worktree) {
         console.error("Cannot combine --current-branch and --worktree.");
@@ -810,9 +812,9 @@ program
           return;
         }
 
-        if (onGnhfBranch) {
+        if (onRalphloopBranch) {
           console.error(
-            "Cannot use --worktree from a gnhf branch. Switch to the base branch first.",
+            "Cannot use --worktree from a ralphloop branch. Switch to the base branch first.",
           );
           process.exit(1);
         }
@@ -838,8 +840,8 @@ program
           );
           startIteration = getLastIterationNumber(runInfo);
           console.error(
-            `\n  gnhf: resuming preserved worktree at ${worktreePath}` +
-              `\n  gnhf: continuing run ${runInfo.runId} from iteration ${startIteration}\n`,
+            `\n  ralphloop: resuming preserved worktree at ${worktreePath}` +
+              `\n  ralphloop: continuing run ${runInfo.runId} from iteration ${startIteration}\n`,
           );
         } else {
           worktreeCleanup = () => {
@@ -887,8 +889,8 @@ program
         } else {
           runInfo = initializeCurrentBranchRun(prompt, cwd, schemaOptions);
         }
-      } else if (onGnhfBranch) {
-        const existingRunId = currentBranch.slice("gnhf/".length);
+      } else if (onRalphloopBranch) {
+        const existingRunId = currentBranch.slice("ralphloop/".length);
         const existingMetadata = peekRunMetadata(existingRunId, cwd);
         effectiveCommitMessage = existingMetadata.commitMessage;
         const existingPrompt = readFileSync(
@@ -918,13 +920,13 @@ program
           startIteration = getLastIterationNumber(existing);
         } else {
           const answer = await ask(
-            `You are on gnhf branch "${currentBranch}".\n` +
+            `You are on ralphloop branch "${currentBranch}".\n` +
               `  (o) Update prompt and continue current run\n` +
               `  (n) Start a new branch on top of this one\n` +
               `  (q) Quit\n` +
               `Choose [o/n/q]: `,
-            "The overwrite prompt closed before a choice was entered. Re-run gnhf from an interactive terminal and choose o, n, or q.",
-            "Cannot show the overwrite prompt because stdin is not interactive. Re-run gnhf from an interactive terminal and choose o, n, or q.",
+            "The overwrite prompt closed before a choice was entered. Re-run ralphloop from an interactive terminal and choose o, n, or q.",
+            "Cannot show the overwrite prompt because stdin is not interactive. Re-run ralphloop from an interactive terminal and choose o, n, or q.",
           );
 
           if (answer === "o") {
@@ -989,7 +991,7 @@ program
             (await startSleepPrevention(process.argv.slice(2), {
               reexecEnv: persistedPrompt
                 ? {
-                    [GNHF_REEXEC_STDIN_PROMPT_FILE]: persistedPrompt.path,
+                    [RALPHLOOP_REEXEC_STDIN_PROMPT_FILE]: persistedPrompt.path,
                   }
                 : undefined,
             }));
@@ -1042,7 +1044,7 @@ program
         push: options.push,
         platform: process.platform,
         nodeVersion: process.version,
-        gnhfVersion: packageVersion,
+        ralphloopVersion: packageVersion,
       });
 
       const model =
@@ -1164,10 +1166,12 @@ program
             timeoutMs: FORCE_EXIT_TIMEOUT_MS,
           });
           console.error(
-            `\n  gnhf: shutdown timed out after ${FORCE_EXIT_TIMEOUT_MS / 1000}s, forcing exit\n`,
+            `\n  ralphloop: shutdown timed out after ${FORCE_EXIT_TIMEOUT_MS / 1000}s, forcing exit\n`,
           );
           if (worktreePath && shouldPreserveWorktree()) {
-            console.error(`  gnhf: worktree preserved at ${worktreePath}\n`);
+            console.error(
+              `  ralphloop: worktree preserved at ${worktreePath}\n`,
+            );
           }
           process.exit(getSignalExitCode(shutdownSignal ?? "SIGINT"));
         }
@@ -1262,7 +1266,7 @@ program
         });
 
         if (finalState.status === "aborted") {
-          console.error(`\n  gnhf: Run log: ${runInfo.logPath}\n`);
+          console.error(`\n  ralphloop: Run log: ${runInfo.logPath}\n`);
         }
 
         if (worktreePath) {
@@ -1272,8 +1276,8 @@ program
           ) {
             worktreeCleanup = null;
             console.error(
-              `\n  gnhf: worktree preserved at ${worktreePath}` +
-                `\n  gnhf: merge the branch and remove with: git worktree remove "${worktreePath}"\n`,
+              `\n  ralphloop: worktree preserved at ${worktreePath}` +
+                `\n  ralphloop: merge the branch and remove with: git worktree remove "${worktreePath}"\n`,
             );
           } else {
             worktreeCleanup?.();
@@ -1304,7 +1308,7 @@ function exitAltScreen() {
 }
 
 function die(message: string): never {
-  console.error(`\n  gnhf: ${humanizeErrorMessage(message)}\n`);
+  console.error(`\n  ralphloop: ${humanizeErrorMessage(message)}\n`);
   process.exit(1);
 }
 

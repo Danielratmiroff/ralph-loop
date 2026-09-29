@@ -23,7 +23,7 @@ const mockCursorAgentPath = join(
 );
 
 const emptyGitConfigDir = mkdtempSync(
-  join(tmpdir(), "gnhf-e2e-cursor-gitconfig-"),
+  join(tmpdir(), "ralphloop-e2e-cursor-gitconfig-"),
 );
 const emptyGitConfigPath = join(emptyGitConfigDir, "gitconfig");
 writeFileSync(emptyGitConfigPath, "", "utf-8");
@@ -51,9 +51,9 @@ function git(args: string[], cwd: string): string {
 }
 
 function createRepo(): string {
-  const cwd = mkdtempSync(join(tmpdir(), "gnhf-e2e-cursor-repo-"));
+  const cwd = mkdtempSync(join(tmpdir(), "ralphloop-e2e-cursor-repo-"));
   git(["init", "-b", "main"], cwd);
-  git(["config", "user.name", "gnhf tests"], cwd);
+  git(["config", "user.name", "ralphloop tests"], cwd);
   git(["config", "user.email", "tests@example.com"], cwd);
   writeFileSync(join(cwd, "README.md"), "# fixture\n", "utf-8");
   git(["add", "README.md"], cwd);
@@ -71,7 +71,7 @@ function readJsonLines(filePath: string): Record<string, unknown>[] {
 }
 
 function findRunLogPath(cwd: string): string {
-  const runsDir = join(cwd, ".gnhf", "runs");
+  const runsDir = join(cwd, ".ralphloop", "runs");
   if (!existsSync(runsDir)) {
     throw new Error(`No run directory found under ${runsDir}`);
   }
@@ -81,7 +81,7 @@ function findRunLogPath(cwd: string): string {
       `Expected exactly one run in ${runsDir}, found ${runs.length}: ${runs.join(", ")}`,
     );
   }
-  return join(runsDir, runs[0]!, "gnhf.log");
+  return join(runsDir, runs[0]!, "ralphloop.log");
 }
 
 function runCli(
@@ -119,11 +119,11 @@ function createCursorEnv(
     extraConfigYaml?: string;
   },
 ): NodeJS.ProcessEnv {
-  const home = mkdtempSync(join(tmpdir(), "gnhf-e2e-cursor-home-"));
+  const home = mkdtempSync(join(tmpdir(), "ralphloop-e2e-cursor-home-"));
   tempDirs.push(home);
-  mkdirSync(join(home, ".gnhf"), { recursive: true });
+  mkdirSync(join(home, ".ralphloop"), { recursive: true });
   writeFileSync(
-    join(home, ".gnhf", "config.yml"),
+    join(home, ".ralphloop", "config.yml"),
     [
       "agent: cursor",
       "preventSleep: false",
@@ -140,11 +140,11 @@ function createCursorEnv(
     ...sanitizedGitEnv,
     HOME: home,
     USERPROFILE: home,
-    GNHF_MOCK_CURSOR_LOG_PATH: options.mockLogPath,
+    RALPHLOOP_MOCK_CURSOR_LOG_PATH: options.mockLogPath,
   };
 }
 
-describe("gnhf e2e cursor agent", () => {
+describe("ralphloop e2e cursor agent", () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -166,7 +166,7 @@ describe("gnhf e2e cursor agent", () => {
     chmodSync(mockCursorAgentPath, 0o755);
     const cwd = createRepo();
     tempDirs.push(cwd);
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-cursor-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-cursor-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-cursor.jsonl");
 
@@ -188,14 +188,14 @@ describe("gnhf e2e cursor agent", () => {
     );
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("gnhf stopped");
+    expect(result.stdout).toContain("ralphloop stopped");
     expect(result.stdout).toContain("cursor ran");
     expect(result.stdout).toContain("max iterations reached (1)");
     expect(readFileSync(join(cwd, "hello.txt"), "utf-8")).toBe(
       "hello from cursor mock\n",
     );
     expect(git(["rev-list", "--count", "HEAD"], cwd)).toBe("2");
-    expect(git(["log", "-1", "--format=%s"], cwd)).not.toContain("gnhf");
+    expect(git(["log", "-1", "--format=%s"], cwd)).not.toContain("ralphloop");
 
     const spawnEvent = readJsonLines(mockLogPath).find(
       (entry) => entry.event === "spawn",
@@ -224,7 +224,7 @@ describe("gnhf e2e cursor agent", () => {
     chmodSync(mockCursorAgentPath, 0o755);
     const cwd = createRepo();
     tempDirs.push(cwd);
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-cursor-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-cursor-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-cursor-sandbox.jsonl");
 

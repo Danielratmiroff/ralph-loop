@@ -44,14 +44,14 @@ interface SleepPreventionDeps {
 
 const SYSTEMD_INHIBIT_READY_TIMEOUT_MS = 5_000;
 const SYSTEMD_INHIBIT_READY_POLL_MS = 25;
-const GNHF_SLEEP_REEXEC_READY_PATH = "GNHF_SLEEP_REEXEC_READY_PATH";
-const GNHF_SLEEP_REEXEC_READY_DIR_PREFIX = "gnhf-sleep-";
-const GNHF_SLEEP_REEXEC_READY_FILENAME = "reexec-ready";
+const RALPHLOOP_SLEEP_REEXEC_READY_PATH = "RALPHLOOP_SLEEP_REEXEC_READY_PATH";
+const RALPHLOOP_SLEEP_REEXEC_READY_DIR_PREFIX = "ralphloop-sleep-";
+const RALPHLOOP_SLEEP_REEXEC_READY_FILENAME = "reexec-ready";
 const HELPER_STARTUP_GRACE_MS = 100;
 const HELPER_READY_TIMEOUT_MS = 15_000;
 const HELPER_STDIO_FLUSH_TIMEOUT_MS = 1_000;
 const HELPER_STDERR_TAIL_LIMIT = 2_000;
-const WINDOWS_HELPER_READY_MARKER = "gnhf-sleep-ready";
+const WINDOWS_HELPER_READY_MARKER = "ralphloop-sleep-ready";
 
 interface HelperReadiness {
   marker: string;
@@ -117,14 +117,14 @@ function isTrustedLinuxReexecReadyPath(readyPath: string): boolean {
   const resolvedReadyPath = resolve(readyPath);
   const readyDir = dirname(resolvedReadyPath);
   return (
-    basename(resolvedReadyPath) === GNHF_SLEEP_REEXEC_READY_FILENAME &&
+    basename(resolvedReadyPath) === RALPHLOOP_SLEEP_REEXEC_READY_FILENAME &&
     dirname(readyDir) === resolve(tmpdir()) &&
-    basename(readyDir).startsWith(GNHF_SLEEP_REEXEC_READY_DIR_PREFIX)
+    basename(readyDir).startsWith(RALPHLOOP_SLEEP_REEXEC_READY_DIR_PREFIX)
   );
 }
 
 function signalLinuxReexecReady(env: NodeJS.ProcessEnv): void {
-  const readyPath = env[GNHF_SLEEP_REEXEC_READY_PATH];
+  const readyPath = env[RALPHLOOP_SLEEP_REEXEC_READY_PATH];
   if (!readyPath) return;
   if (!isTrustedLinuxReexecReadyPath(readyPath)) {
     appendDebugLog("sleep:ready-signal-failed", {
@@ -477,22 +477,22 @@ export async function startSleepPrevention(
   const spawnFn = deps.spawn ?? spawn;
 
   if (platform === "linux") {
-    if (env.GNHF_SLEEP_INHIBITED === "1") {
+    if (env.RALPHLOOP_SLEEP_INHIBITED === "1") {
       signalLinuxReexecReady(env);
       return { type: "skipped", reason: "already-inhibited" };
     }
 
     const readyDir = mkdtempSync(
-      join(tmpdir(), GNHF_SLEEP_REEXEC_READY_DIR_PREFIX),
+      join(tmpdir(), RALPHLOOP_SLEEP_REEXEC_READY_DIR_PREFIX),
     );
-    const readyPath = join(readyDir, GNHF_SLEEP_REEXEC_READY_FILENAME);
+    const readyPath = join(readyDir, RALPHLOOP_SLEEP_REEXEC_READY_FILENAME);
     const child = spawnFn(
       "systemd-inhibit",
       [
         "--what=idle:sleep",
         "--mode=block",
-        "--who=gnhf",
-        "--why=Prevent sleep while gnhf is running",
+        "--who=ralphloop",
+        "--why=Prevent sleep while ralphloop is running",
         processExecPath,
         ...processExecArgv,
         processArgv1,
@@ -503,8 +503,8 @@ export async function startSleepPrevention(
         env: {
           ...env,
           ...reexecEnv,
-          GNHF_SLEEP_INHIBITED: "1",
-          [GNHF_SLEEP_REEXEC_READY_PATH]: readyPath,
+          RALPHLOOP_SLEEP_INHIBITED: "1",
+          [RALPHLOOP_SLEEP_REEXEC_READY_PATH]: readyPath,
         },
         stdio: "inherit",
       },

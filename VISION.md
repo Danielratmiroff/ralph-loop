@@ -1,6 +1,6 @@
 # Vision
 
-`gnhf` exists so that the hours its user spends asleep become committed, reviewable work.
+`ralphloop` exists so that the hours its user spends asleep become committed, reviewable work.
 It serves a developer who points a coding agent at a repository at night and reviews a branch in the morning.
 It owns exactly one thing: the unattended loop that turns agent iterations into small, safe, documented git commits.
 
@@ -22,12 +22,12 @@ Steering a live run and reviewing a finished run's commits are user control, not
 The run defends itself against whatever would end the night early: machine sleep, a closed terminal, transient agent failures.
 Anything that can silently hang an unattended run, such as an interactive credential prompt, is refused until it works unattended.
 Permanent errors, such as an exhausted credit balance, abort at once rather than burning the night in retries.
-gnhf never force-pushes, never auto-pulls, and never starts on a working tree it cannot protect.
+ralphloop never force-pushes, never auto-pulls, and never starts on a working tree it cannot protect.
 New autonomy is welcome only when it arrives with a limit the user can set and an interrupt that still works.
 
 ## Small surface, wide reach
 
-gnhf is agent-agnostic: the loop, not any one vendor's CLI, is the product.
+ralphloop is agent-agnostic: the loop, not any one vendor's CLI, is the product.
 The extension path for new agents is ACP; a new agent arrives as an `acp:` target or a registry override, not as new adapter code.
 A native adapter is permanent maintainer surface, so the native roster shrinks over time rather than grows.
 A native adapter is retired only when its ACP path keeps every key capability the native path had.
@@ -38,7 +38,7 @@ More operating systems and more install channels are welcome, and a shipped plat
 
 ## Nothing identifiable leaves the machine
 
-Prompts, notes, run metadata, and logs live under `.gnhf/runs/` and stay local, so the branch only contains intentional work.
+Prompts, notes, run metadata, and logs live under `.ralphloop/runs/` and stay local, so the branch only contains intentional work.
 Raw agent commands are redacted from logs and errors so local paths and secrets are never written out.
 Publishing is always an explicit user choice, such as `--push`.
 
@@ -50,7 +50,7 @@ A misaligned summary, a dropped animation, or a title left dirty after exit is t
 
 ## Scope
 
-gnhf is not a coding agent, and it does not compete with the agents it runs.
+ralphloop is not a coding agent, and it does not compete with the agents it runs.
 It presents the night's work for the user's judgment but never judges it: it is not a CI system, not a reviewer, and not a merge authority.
 It does not own what another layer already owns: opening PRs belongs to outer automation, verification belongs to agent hooks, parallelism is running multiple instances, and objectives are the user's own prompts.
 It is a local, single-user CLI, not a hosted service or a team platform.

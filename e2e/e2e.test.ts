@@ -22,7 +22,7 @@ const windowsFixtureBinDir = join(fixtureBinDir, "windows");
 // developer's real ~/.gitconfig (which may enable commit.gpgsign, set a
 // credential helper, install hooks via core.hooksPath, etc.) cannot affect
 // these tests. Created once per worker; vitest reaps tmpdirs between runs.
-const emptyGitConfigDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-gitconfig-"));
+const emptyGitConfigDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-gitconfig-"));
 const emptyGitConfigPath = join(emptyGitConfigDir, "gitconfig");
 writeFileSync(emptyGitConfigPath, "", "utf-8");
 
@@ -49,9 +49,9 @@ function git(args: string[], cwd: string): string {
 }
 
 function createRepo(): string {
-  const cwd = mkdtempSync(join(tmpdir(), "gnhf-e2e-"));
+  const cwd = mkdtempSync(join(tmpdir(), "ralphloop-e2e-"));
   git(["init", "-b", "main"], cwd);
-  git(["config", "user.name", "gnhf tests"], cwd);
+  git(["config", "user.name", "ralphloop tests"], cwd);
   git(["config", "user.email", "tests@example.com"], cwd);
   writeFileSync(join(cwd, "README.md"), "# fixture\n", "utf-8");
   git(["add", "README.md"], cwd);
@@ -69,12 +69,12 @@ function readJsonLines(filePath: string): Record<string, unknown>[] {
 }
 
 /**
- * Locate the gnhf.log file that the run wrote inside the repo. gnhf always
- * writes to `<cwd>/.gnhf/runs/<runId>/gnhf.log`, and each test creates a
+ * Locate the ralphloop.log file that the run wrote inside the repo. ralphloop always
+ * writes to `<cwd>/.ralphloop/runs/<runId>/ralphloop.log`, and each test creates a
  * fresh repo, so there's exactly one run dir.
  */
 function findRunLogPath(cwd: string): string {
-  const runsDir = join(cwd, ".gnhf", "runs");
+  const runsDir = join(cwd, ".ralphloop", "runs");
   if (!existsSync(runsDir)) {
     throw new Error(`No run directory found under ${runsDir}`);
   }
@@ -91,7 +91,7 @@ function findRunLogPath(cwd: string): string {
       `Expected exactly one run in ${runsDir}, found ${runs.length}: ${runs.join(", ")}`,
     );
   }
-  return join(runsDir, runs[0]!, "gnhf.log");
+  return join(runsDir, runs[0]!, "ralphloop.log");
 }
 
 async function waitForLogEvent(
@@ -131,12 +131,12 @@ async function waitForRunLogPath(
   timeoutMs = 15_000,
 ): Promise<string> {
   const deadline = Date.now() + timeoutMs;
-  const runsDir = join(cwd, ".gnhf", "runs");
+  const runsDir = join(cwd, ".ralphloop", "runs");
 
   while (Date.now() < deadline) {
     if (existsSync(runsDir)) {
       const runs = readdirSync(runsDir);
-      if (runs.length === 1) return join(runsDir, runs[0]!, "gnhf.log");
+      if (runs.length === 1) return join(runsDir, runs[0]!, "ralphloop.log");
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
   }
@@ -211,7 +211,7 @@ function createTestEnv(
   mockLogPath: string,
   tempDirs: string[],
 ): NodeJS.ProcessEnv {
-  const home = mkdtempSync(join(tmpdir(), "gnhf-e2e-home-"));
+  const home = mkdtempSync(join(tmpdir(), "ralphloop-e2e-home-"));
   tempDirs.push(home);
 
   return {
@@ -223,11 +223,11 @@ function createTestEnv(
       process.platform === "win32"
         ? `${windowsFixtureBinDir};${fixtureBinDir};${process.env.PATH ?? ""}`
         : `${fixtureBinDir}:${process.env.PATH ?? ""}`,
-    GNHF_MOCK_OPENCODE_LOG_PATH: mockLogPath,
+    RALPHLOOP_MOCK_OPENCODE_LOG_PATH: mockLogPath,
   };
 }
 
-describe("gnhf e2e", () => {
+describe("ralphloop e2e", () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -248,7 +248,7 @@ describe("gnhf e2e", () => {
   it("runs one iteration from an argv prompt and cleans up the mock opencode server", async () => {
     const cwd = createRepo();
     tempDirs.push(cwd);
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-opencode.jsonl");
 
@@ -261,13 +261,13 @@ describe("gnhf e2e", () => {
     );
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("gnhf stopped");
+    expect(result.stdout).toContain("ralphloop stopped");
     expect(result.stdout).toContain("opencode ran");
     expect(result.stdout).toContain("max iterations reached (1)");
     expect(result.stdout).toContain("branch diff");
     expect(result.stdout).toContain("git log --oneline");
     expect(git(["rev-list", "--count", "HEAD"], cwd)).toBe("2");
-    expect(git(["log", "-1", "--format=%s"], cwd)).not.toContain("gnhf");
+    expect(git(["log", "-1", "--format=%s"], cwd)).not.toContain("ralphloop");
 
     const startEvent = await waitForLogEvent(mockLogPath, "server:start");
     expect(startEvent.command).toBe("serve");
@@ -290,12 +290,12 @@ describe("gnhf e2e", () => {
   it("runs on the current branch and pushes each successful iteration", async () => {
     const cwd = createRepo();
     tempDirs.push(cwd);
-    const remote = mkdtempSync(join(tmpdir(), "gnhf-e2e-remote-"));
+    const remote = mkdtempSync(join(tmpdir(), "ralphloop-e2e-remote-"));
     tempDirs.push(remote);
     git(["init", "--bare"], remote);
     git(["remote", "add", "origin", remote], cwd);
 
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-opencode.jsonl");
 
@@ -345,7 +345,7 @@ describe("gnhf e2e", () => {
     );
     chmodSync(hookPath, 0o755);
 
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-opencode.jsonl");
 
@@ -361,14 +361,14 @@ describe("gnhf e2e", () => {
       {
         env: {
           ...createTestEnv(mockLogPath, tempDirs),
-          GNHF_MOCK_OPENCODE_PRECOMMIT_REPAIR: "1",
+          RALPHLOOP_MOCK_OPENCODE_PRECOMMIT_REPAIR: "1",
         },
       },
     );
 
     if (result.code !== 0) {
       throw new Error(
-        `gnhf exited ${result.code}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+        `ralphloop exited ${result.code}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
       );
     }
     expect(readFileSync(join(cwd, "README.md"), "utf-8")).toContain(
@@ -395,7 +395,7 @@ describe("gnhf e2e", () => {
   it("reports an OpenCode provider overload as a clear retryable error, not a JSON parse failure", async () => {
     const cwd = createRepo();
     tempDirs.push(cwd);
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-opencode.jsonl");
 
@@ -413,7 +413,7 @@ describe("gnhf e2e", () => {
       {
         env: {
           ...createTestEnv(mockLogPath, tempDirs),
-          GNHF_MOCK_OPENCODE_OVERLOAD: "1",
+          RALPHLOOP_MOCK_OPENCODE_OVERLOAD: "1",
         },
       },
     );
@@ -473,7 +473,7 @@ describe("gnhf e2e", () => {
     async ({ mode, expected }) => {
       const cwd = createRepo();
       tempDirs.push(cwd);
-      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
       tempDirs.push(logDir);
       const mockLogPath = join(logDir, "mock-opencode.jsonl");
 
@@ -491,7 +491,7 @@ describe("gnhf e2e", () => {
         {
           env: {
             ...createTestEnv(mockLogPath, tempDirs),
-            GNHF_MOCK_CLAUDE_MODE: mode,
+            RALPHLOOP_MOCK_CLAUDE_MODE: mode,
           },
         },
       );
@@ -521,7 +521,7 @@ describe("gnhf e2e", () => {
   it("keeps going through extra usage when the reported reset time has already elapsed", async () => {
     const cwd = createRepo();
     tempDirs.push(cwd);
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-opencode.jsonl");
 
@@ -539,7 +539,7 @@ describe("gnhf e2e", () => {
       {
         env: {
           ...createTestEnv(mockLogPath, tempDirs),
-          GNHF_MOCK_CLAUDE_MODE: "overage-elapsed-reset",
+          RALPHLOOP_MOCK_CLAUDE_MODE: "overage-elapsed-reset",
         },
       },
     );
@@ -562,7 +562,7 @@ describe("gnhf e2e", () => {
   it("stops and names extra usage in the exit summary when no reset time is reported", async () => {
     const cwd = createRepo();
     tempDirs.push(cwd);
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-opencode.jsonl");
 
@@ -580,15 +580,15 @@ describe("gnhf e2e", () => {
       {
         env: {
           ...createTestEnv(mockLogPath, tempDirs),
-          GNHF_MOCK_CLAUDE_MODE: "overage-no-reset",
+          RALPHLOOP_MOCK_CLAUDE_MODE: "overage-no-reset",
         },
       },
     );
 
     expect(result.code).toBe(0);
     // The permanent stdout summary is what the user reads in the morning, so
-    // the reason gnhf stopped spending has to be in it.
-    expect(result.stdout).toContain("gnhf stopped");
+    // the reason ralphloop stopped spending has to be in it.
+    expect(result.stdout).toContain("ralphloop stopped");
     expect(result.stdout).toContain(
       "extra usage engaged but no reset time was reported",
     );
@@ -604,7 +604,7 @@ describe("gnhf e2e", () => {
   it("reads the objective from stdin", async () => {
     const cwd = createRepo();
     tempDirs.push(cwd);
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-opencode.jsonl");
 
@@ -630,10 +630,10 @@ describe("gnhf e2e", () => {
     expect(String(messageEvent.prompt)).toContain("ship it from stdin");
   }, 30_000);
 
-  it("resumes an existing gnhf branch without requiring the prompt again", async () => {
+  it("resumes an existing ralphloop branch without requiring the prompt again", async () => {
     const cwd = createRepo();
     tempDirs.push(cwd);
-    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-opencode.jsonl");
 
@@ -660,7 +660,7 @@ describe("gnhf e2e", () => {
     async () => {
       const cwd = createRepo();
       tempDirs.push(cwd);
-      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
       tempDirs.push(logDir);
       const mockLogPath = join(logDir, "mock-opencode.jsonl");
       const mockPids = new Set<number>();
@@ -692,7 +692,7 @@ describe("gnhf e2e", () => {
             cwd,
             env: {
               ...createTestEnv(mockLogPath, tempDirs),
-              GNHF_MOCK_OPENCODE_HANG_ITERATION: hangIteration,
+              RALPHLOOP_MOCK_OPENCODE_HANG_ITERATION: hangIteration,
             },
             stdio: ["pipe", "pipe", "pipe"],
           },
@@ -727,7 +727,7 @@ describe("gnhf e2e", () => {
           runLogPath,
           (entry) => entry.event === "agent:run:start" && entry.iteration === 2,
         );
-        const runsDir = join(cwd, ".gnhf", "runs");
+        const runsDir = join(cwd, ".ralphloop", "runs");
         const runId = readdirSync(runsDir)[0]!;
         expect(existsSync(join(runsDir, runId, "iteration-2.jsonl"))).toBe(
           true,
@@ -772,10 +772,10 @@ describe("gnhf e2e", () => {
     async () => {
       const cwd = createRepo();
       tempDirs.push(cwd);
-      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
       tempDirs.push(logDir);
       const mockLogPath = join(logDir, "mock-opencode.jsonl");
-      const worktreeParent = `${cwd}-gnhf-worktrees`;
+      const worktreeParent = `${cwd}-ralphloop-worktrees`;
       tempDirs.push(worktreeParent);
 
       const result = await runCli(
@@ -799,30 +799,30 @@ describe("gnhf e2e", () => {
       expect(git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)).toBe("main");
       expect(git(["rev-list", "--count", "HEAD"], cwd)).toBe("1");
 
-      // Worktree directory should exist and contain the gnhf branch
+      // Worktree directory should exist and contain the ralphloop branch
       expect(existsSync(worktreeParent)).toBe(true);
       const worktreeDirs = readdirSync(worktreeParent);
       expect(worktreeDirs.length).toBe(1);
       const worktreePath = join(worktreeParent, worktreeDirs[0]!);
 
-      // The worktree should be on a gnhf/* branch with the agent's commit
+      // The worktree should be on a ralphloop/* branch with the agent's commit
       const wtBranch = git(["rev-parse", "--abbrev-ref", "HEAD"], worktreePath);
-      expect(wtBranch).toMatch(/^gnhf\//);
+      expect(wtBranch).toMatch(/^ralphloop\//);
       const wtCommitCount = git(["rev-list", "--count", "HEAD"], worktreePath);
       expect(Number(wtCommitCount)).toBeGreaterThanOrEqual(2); // init + agent commit
 
-      // The commit message should follow gnhf format
+      // The commit message should follow ralphloop format
       expect(git(["log", "-1", "--format=%s"], worktreePath)).not.toContain(
-        "gnhf",
+        "ralphloop",
       );
 
       // Debug log should record worktree info
       const debugLogPath = join(
         worktreePath,
-        ".gnhf",
+        ".ralphloop",
         "runs",
         worktreeDirs[0]!,
-        "gnhf.log",
+        "ralphloop.log",
       );
       const debugEvents = readJsonLines(debugLogPath);
       const startEvent = debugEvents.find((e) => e.event === "run:start");
@@ -840,15 +840,15 @@ describe("gnhf e2e", () => {
     async () => {
       const cwd = createRepo();
       tempDirs.push(cwd);
-      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
       tempDirs.push(logDir);
       const mockLogPath = join(logDir, "mock-opencode.jsonl");
-      const worktreeParent = `${cwd}-gnhf-worktrees`;
+      const worktreeParent = `${cwd}-ralphloop-worktrees`;
       tempDirs.push(worktreeParent);
-      const fakeBinDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-bin-"));
+      const fakeBinDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-bin-"));
       tempDirs.push(fakeBinDir);
-      // Records the pid it hands to gnhf, then execs so that pid IS the
-      // re-execed gnhf process. Comparing it against the pid stamped on the
+      // Records the pid it hands to ralphloop, then execs so that pid IS the
+      // re-execed ralphloop process. Comparing it against the pid stamped on the
       // run log's run:start event proves the re-exec actually happened
       // instead of the whole run staying in one process.
       const markerPath = join(logDir, "inhibitor-invocations");
@@ -893,8 +893,8 @@ describe("gnhf e2e", () => {
       expect(worktreeDirs).toHaveLength(1);
       const runId = worktreeDirs[0]!;
       const worktreePath = join(worktreeParent, runId);
-      const runDir = join(worktreePath, ".gnhf", "runs", runId);
-      const logFilePath = join(runDir, "gnhf.log");
+      const runDir = join(worktreePath, ".ralphloop", "runs", runId);
+      const logFilePath = join(runDir, "ralphloop.log");
       expect(existsSync(join(runDir, "notes.md"))).toBe(true);
       expect(existsSync(logFilePath)).toBe(true);
 
@@ -913,11 +913,11 @@ describe("gnhf e2e", () => {
 
       // The committed work itself survived, not just the run metadata.
       expect(git(["rev-parse", "--abbrev-ref", "HEAD"], worktreePath)).toMatch(
-        /^gnhf\//,
+        /^ralphloop\//,
       );
       expect(git(["rev-list", "--count", "HEAD"], worktreePath)).toBe("2");
       expect(git(["log", "-1", "--format=%s"], worktreePath)).not.toContain(
-        "gnhf",
+        "ralphloop",
       );
     },
     30_000,
@@ -928,10 +928,10 @@ describe("gnhf e2e", () => {
     async () => {
       const cwd = createRepo();
       tempDirs.push(cwd);
-      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
       tempDirs.push(logDir);
       const mockLogPath = join(logDir, "mock-opencode.jsonl");
-      const worktreeParent = `${cwd}-gnhf-worktrees`;
+      const worktreeParent = `${cwd}-ralphloop-worktrees`;
       tempDirs.push(worktreeParent);
 
       const env = createTestEnv(mockLogPath, tempDirs);
@@ -981,7 +981,7 @@ describe("gnhf e2e", () => {
       );
       expect(commitsAfterSecond).toBe(commitsAfterFirst + 1);
       expect(git(["log", "-1", "--format=%s"], worktreePath)).not.toContain(
-        "gnhf",
+        "ralphloop",
       );
     },
     60_000,
@@ -992,10 +992,10 @@ describe("gnhf e2e", () => {
     async () => {
       const cwd = createRepo();
       tempDirs.push(cwd);
-      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
       tempDirs.push(logDir);
       const mockLogPath = join(logDir, "mock-opencode.jsonl");
-      const worktreeParent = `${cwd}-gnhf-worktrees`;
+      const worktreeParent = `${cwd}-ralphloop-worktrees`;
       tempDirs.push(worktreeParent);
 
       const env = createTestEnv(mockLogPath, tempDirs);
@@ -1034,7 +1034,7 @@ describe("gnhf e2e", () => {
       );
       expect(second.code).not.toBe(0);
       expect(second.stderr).toContain("rather than");
-      expect(second.stderr).toMatch(/gnhf\//);
+      expect(second.stderr).toMatch(/ralphloop\//);
       expect(second.stderr).toContain("sideways");
     },
     60_000,
@@ -1045,10 +1045,10 @@ describe("gnhf e2e", () => {
     async () => {
       const cwd = createRepo();
       tempDirs.push(cwd);
-      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
       tempDirs.push(logDir);
       const mockLogPath = join(logDir, "mock-opencode.jsonl");
-      const worktreeParent = `${cwd}-gnhf-worktrees`;
+      const worktreeParent = `${cwd}-ralphloop-worktrees`;
       // Register for cleanup in case test fails and worktree isn't removed
       tempDirs.push(worktreeParent);
 
@@ -1057,7 +1057,7 @@ describe("gnhf e2e", () => {
       // handler deliberately never sends a response (it only listens for the
       // request to close). This simulates a long-running agent that hasn't
       // produced any commits. We then send SIGINT to trigger graceful shutdown,
-      // which should cause gnhf to clean up the worktree (0 commits = auto-remove).
+      // which should cause ralphloop to clean up the worktree (0 commits = auto-remove).
       const child = spawn(
         process.execPath,
         [distCliPath, "slow cleanup", "--agent", "opencode", "--worktree"],
@@ -1110,11 +1110,11 @@ describe("gnhf e2e", () => {
   // Windows has no POSIX signals; child.kill("SIGINT") force-terminates the
   // process tree without triggering the graceful shutdown path this test covers.
   it.skipIf(process.platform === "win32")(
-    "shuts down the agent server when gnhf receives SIGINT",
+    "shuts down the agent server when ralphloop receives SIGINT",
     async () => {
       const cwd = createRepo();
       tempDirs.push(cwd);
-      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      const logDir = mkdtempSync(join(tmpdir(), "ralphloop-e2e-logs-"));
       tempDirs.push(logDir);
       const mockLogPath = join(logDir, "mock-opencode.jsonl");
 

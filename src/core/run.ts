@@ -44,7 +44,7 @@ export interface RunMetadata {
   commitMessage: CommitMessageConfig | undefined;
 }
 
-const LOG_FILENAME = "gnhf.log";
+const LOG_FILENAME = "ralphloop.log";
 const END_STATE_FILENAME = "end-state.json";
 const STOP_WHEN_FILENAME = "stop-when";
 const COMMIT_MESSAGE_FILENAME = "commit-message";
@@ -181,7 +181,7 @@ function ensureRunMetadataIgnored(cwd: string): void {
   const resolved = isAbsolute(excludePath)
     ? excludePath
     : join(cwd, excludePath);
-  const entry = ".gnhf/runs/";
+  const entry = ".ralphloop/runs/";
   mkdirSync(dirname(resolved), { recursive: true });
 
   if (existsSync(resolved)) {
@@ -205,7 +205,7 @@ export function setupRun(
 ): RunInfo {
   ensureRunMetadataIgnored(cwd);
 
-  const runDir = join(cwd, ".gnhf", "runs", runId);
+  const runDir = join(cwd, ".ralphloop", "runs", runId);
   mkdirSync(runDir, { recursive: true });
 
   const promptPath = join(runDir, "prompt.md");
@@ -215,7 +215,7 @@ export function setupRun(
   if (!existsSync(notesPath)) {
     writeFileSync(
       notesPath,
-      `# gnhf run: ${runId}\n\nObjective: see .gnhf/runs/${runId}/prompt.md\n\n## Iteration Log\n`,
+      `# ralphloop run: ${runId}\n\nObjective: see .ralphloop/runs/${runId}/prompt.md\n\n## Iteration Log\n`,
       "utf-8",
     );
   }
@@ -264,7 +264,7 @@ export function resumeRun(
   cwd: string,
   schemaOptions: RunSchemaOptions,
 ): RunInfo {
-  const runDir = join(cwd, ".gnhf", "runs", runId);
+  const runDir = join(cwd, ".ralphloop", "runs", runId);
   if (!existsSync(runDir)) {
     throw new Error(`Run directory not found: ${runDir}`);
   }
@@ -312,7 +312,7 @@ export function resumeRun(
 }
 
 export function peekRunMetadata(runId: string, cwd: string): RunMetadata {
-  const runDir = join(cwd, ".gnhf", "runs", runId);
+  const runDir = join(cwd, ".ralphloop", "runs", runId);
   if (!existsSync(runDir)) {
     throw new Error(`Run directory not found: ${runDir}`);
   }

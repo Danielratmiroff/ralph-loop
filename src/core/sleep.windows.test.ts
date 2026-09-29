@@ -5,13 +5,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { startSleepPrevention } from "./sleep.js";
 
-// These tests execute the real PowerShell helper gnhf spawns on Windows, so
-// they only make sense on win32. A helper that gnhf reports as active but that
-// never applies SetThreadExecutionState is a silent failure: gnhf claims sleep
+// These tests execute the real PowerShell helper ralphloop spawns on Windows, so
+// they only make sense on win32. A helper that ralphloop reports as active but that
+// never applies SetThreadExecutionState is a silent failure: ralphloop claims sleep
 // prevention is on while the machine still sleeps mid-run.
 const describeWindows = describe.skipIf(process.platform !== "win32");
 
-const READY_MARKER = "gnhf-sleep-ready";
+const READY_MARKER = "ralphloop-sleep-ready";
 const HELPER_TIMEOUT_MS = 45_000;
 
 interface CapturedSpawn {
@@ -33,7 +33,7 @@ function createStubChild(): ChildProcess {
   return child as unknown as ChildProcess;
 }
 
-/** Captures the exact command line gnhf hands to the OS for a given parent. */
+/** Captures the exact command line ralphloop hands to the OS for a given parent. */
 async function captureHelperSpawn(parentPid: number): Promise<CapturedSpawn> {
   let captured: CapturedSpawn | null = null;
   const stubSpawn = ((command: string, args: string[]) => {
@@ -142,7 +142,7 @@ describeWindows("Windows sleep prevention helper", () => {
     { timeout: 90_000 },
     async () => {
       // A live parent keeps the helper in its Wait-Process stage, which is the
-      // same shape as a real gnhf run.
+      // same shape as a real ralphloop run.
       const parent = await spawnParent();
 
       const captured = await captureHelperSpawn(parent.pid ?? 0);
@@ -197,7 +197,7 @@ describeWindows("Windows sleep prevention helper", () => {
 
       try {
         // Confirmation is resolved off the startup path, so this awaits the
-        // real PowerShell handshake rather than a value gnhf assumed.
+        // real PowerShell handshake rather than a value ralphloop assumed.
         await expect(result.confirmed).resolves.toBe(true);
       } finally {
         await result.cleanup();

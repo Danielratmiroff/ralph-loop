@@ -310,7 +310,7 @@ describe("git utilities", () => {
   });
 
   describe("getBranchCommitCount", () => {
-    it("counts commits on the current gnhf branch from the base commit", () => {
+    it("counts commits on the current ralphloop branch from the base commit", () => {
       mockExecFileSync.mockImplementation((_cmd, args) => {
         const argv = args as string[];
         if (argv[0] === "rev-list" && argv.includes("abc123..HEAD")) {
@@ -400,8 +400,8 @@ describe("git utilities", () => {
         if (argv[0] === "log") {
           return [
             "abc123\tinitial repo commit",
-            "def456\tgnhf: initialize run run-abc",
-            "ghi789\tgnhf #1: add tests",
+            "def456\tralphloop: initialize run run-abc",
+            "ghi789\tralphloop #1: add tests",
           ].join("\n");
         }
         if (argv[0] === "rev-parse" && argv[1] === "def456^") {
@@ -441,12 +441,12 @@ describe("git utilities", () => {
 
   describe("createWorktree", () => {
     it("passes the branch name and path as distinct argv entries", () => {
-      createWorktree("/repo", "/tmp/wt", "gnhf/my-branch");
+      createWorktree("/repo", "/tmp/wt", "ralphloop/my-branch");
       expect(argsOfCall(0)).toEqual([
         "worktree",
         "add",
         "-b",
-        "gnhf/my-branch",
+        "ralphloop/my-branch",
         "/tmp/wt",
       ]);
     });
@@ -472,15 +472,15 @@ describe("git utilities", () => {
           "HEAD abc123",
           "branch refs/heads/main",
           "",
-          "worktree /tmp/repo-gnhf-worktrees/xyz",
+          "worktree /tmp/repo-ralphloop-worktrees/xyz",
           "HEAD def456",
-          "branch refs/heads/gnhf/xyz",
+          "branch refs/heads/ralphloop/xyz",
           "",
         ].join("\n"),
       );
-      expect(worktreeExists("/tmp/repo", "/tmp/repo-gnhf-worktrees/xyz")).toBe(
-        true,
-      );
+      expect(
+        worktreeExists("/tmp/repo", "/tmp/repo-ralphloop-worktrees/xyz"),
+      ).toBe(true);
     });
 
     it("returns false when the path is not registered", () => {
@@ -492,22 +492,25 @@ describe("git utilities", () => {
           "",
         ].join("\n"),
       );
-      expect(worktreeExists("/tmp/repo", "/tmp/repo-gnhf-worktrees/xyz")).toBe(
-        false,
-      );
+      expect(
+        worktreeExists("/tmp/repo", "/tmp/repo-ralphloop-worktrees/xyz"),
+      ).toBe(false);
     });
 
     it("normalizes paths before comparing so trailing slashes and traversal segments still match", () => {
       mockExecFileSync.mockReturnValue(
         [
-          "worktree /tmp/repo-gnhf-worktrees/xyz",
+          "worktree /tmp/repo-ralphloop-worktrees/xyz",
           "HEAD def456",
-          "branch refs/heads/gnhf/xyz",
+          "branch refs/heads/ralphloop/xyz",
           "",
         ].join("\n"),
       );
       expect(
-        worktreeExists("/tmp/repo", "/tmp/repo-gnhf-worktrees/other/../xyz/"),
+        worktreeExists(
+          "/tmp/repo",
+          "/tmp/repo-ralphloop-worktrees/other/../xyz/",
+        ),
       ).toBe(true);
     });
 

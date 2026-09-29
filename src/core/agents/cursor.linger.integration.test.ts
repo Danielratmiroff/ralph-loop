@@ -14,7 +14,7 @@ describe("CursorAgent linger shutdown (real process)", () => {
   });
 
   it("resolves after shutting down a child that lingers past a success result", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "gnhf-cursor-linger-"));
+    const dir = mkdtempSync(join(tmpdir(), "ralphloop-cursor-linger-"));
     tempDirs.push(dir);
     const bin = join(dir, "linger-agent.mjs");
     writeFileSync(

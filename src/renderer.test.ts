@@ -36,33 +36,33 @@ function createIteration(
 }
 
 describe("renderTitle", () => {
-  it("renders the gnhf eyebrow above the ASCII art", () => {
+  it("renders the ralphloop eyebrow above the ASCII art", () => {
     const lines = renderTitle().map(stripAnsi);
-    const eyebrowIdx = lines.findIndex((l) => l.includes("g n h f"));
-    const artIdx = lines.findIndex((l) => l.includes("┏━╸┏━┓"));
+    const eyebrowIdx = lines.findIndex((l) => l.includes("r a l p h l o o p"));
+    const artIdx = lines.findIndex((l) => l.includes("┏━┓┏━┓╻"));
     expect(eyebrowIdx).toBeGreaterThanOrEqual(0);
     expect(artIdx).toBeGreaterThan(eyebrowIdx);
   });
 
   it("renders the agent name in the eyebrow", () => {
     const lines = renderTitle("rovodev").map(stripAnsi);
-    expect(lines[0]).toContain("g n h f");
+    expect(lines[0]).toContain("r a l p h l o o p");
     expect(lines[0]).toContain("·");
     expect(lines[0]).toContain("r o v o d e v");
   });
 
   it("renders an acp:<target> spec as two dot-separated segments", () => {
     const lines = renderTitle("acp:claude").map(stripAnsi);
-    expect(lines[0]).toContain("g n h f  ·  a c p  ·  c l a u d e");
+    expect(lines[0]).toContain("r a l p h l o o p  ·  a c p  ·  c l a u d e");
     // The colon should not appear as a letter-spaced character.
     expect(lines[0]).not.toContain("a c p :");
   });
 
   it("renders all three lines of ASCII art", () => {
     const plain = renderTitle().map(stripAnsi).join("\n");
-    expect(plain).toContain("┏━╸┏━┓┏━┓╺┳┓");
-    expect(plain).toContain("┃╺┓┃ ┃┃ ┃ ┃┃");
-    expect(plain).toContain("┗━┛┗━┛┗━┛╺┻┛");
+    expect(plain).toContain("┏━┓┏━┓╻  ┏━┓╻ ╻");
+    expect(plain).toContain("┣┳┛┣━┫┃  ┣━┛┣━┫");
+    expect(plain).toContain("╹┗╸╹ ╹┗━╸╹  ╹ ╹");
   });
 });
 
@@ -467,7 +467,7 @@ describe("buildFrame", () => {
     const rawHintLine = lines.at(-2) ?? "";
     const hintLine = stripAnsi(rawHintLine);
 
-    expect(hintLine.trim()).toBe("[ctrl+c to stop, gnhf again to resume]");
+    expect(hintLine.trim()).toBe("[ctrl+c to stop, ralphloop again to resume]");
     expect(rawHintLine).toContain("\x1b[2m");
     expect(stripAnsi(lines.at(-1) ?? "").trim()).toBe("");
 
@@ -512,7 +512,7 @@ describe("buildFrame", () => {
     const lines = stripCursorHome(frame).split("\n");
 
     expect(stripAnsi(lines.at(-2) ?? "").trim()).toBe(
-      "[graceful stop requested, ctrl+c again to force stop, gnhf again to resume]",
+      "[graceful stop requested, ctrl+c again to force stop, ralphloop again to resume]",
     );
   });
 
@@ -558,7 +558,7 @@ describe("buildFrame", () => {
     expect(lines).toHaveLength(24);
     expect(moonLines).toHaveLength(3);
     expect(plainLines.at(-2)?.trim()).toBe(
-      "[graceful stop requested, ctrl+c again to force stop, gnhf again to resume]",
+      "[graceful stop requested, ctrl+c again to force stop, ralphloop again to resume]",
     );
     expect(plainLines.at(-1)?.trim()).toBe("");
   });
@@ -845,8 +845,8 @@ describe("buildContentCells adaptive height", () => {
   it("includes all sections at full height", () => {
     const rows = buildContentCells("my prompt", "claude", state, "00:01:00", 0);
     const text = toText(rows);
-    expect(text).toContain("┏━╸┏━┓");
-    expect(text).toContain("g n h f");
+    expect(text).toContain("┏━┓┏━┓╻");
+    expect(text).toContain("r a l p h l o o p");
     expect(text).toContain("my prompt");
     expect(text).toContain("reading files");
     expect(text).toContain("00:01:00");
@@ -941,8 +941,10 @@ describe("buildContentCells adaptive height", () => {
       .map(rowToString)
       .map(stripAnsi);
 
-    const eyebrowIndex = lines.findIndex((line) => line.includes("g n h f"));
-    const firstArtIndex = lines.findIndex((line) => line.includes("┏━╸┏━┓"));
+    const eyebrowIndex = lines.findIndex((line) =>
+      line.includes("r a l p h l o o p"),
+    );
+    const firstArtIndex = lines.findIndex((line) => line.includes("┏━┓┏━┓╻"));
     const lastArtIndex = lines.findIndex((line) => line.includes("┗━┛┗━┛"));
     const promptIndex = lines.findIndex((line) => line.includes("my prompt"));
 
@@ -960,8 +962,8 @@ describe("buildContentCells adaptive height", () => {
       21,
     );
     const text = toText(rows);
-    expect(text).not.toContain("┏━╸┏━┓");
-    expect(text).toContain("g n h f");
+    expect(text).not.toContain("┏━┓┏━┓╻");
+    expect(text).toContain("r a l p h l o o p");
     expect(text).toContain("my prompt");
     expect(text).toContain("reading files");
     expect(rows.length).toBeLessThanOrEqual(21);
@@ -977,8 +979,8 @@ describe("buildContentCells adaptive height", () => {
       17,
     );
     const text = toText(rows);
-    expect(text).not.toContain("┏━╸┏━┓");
-    expect(text).not.toContain("g n h f");
+    expect(text).not.toContain("┏━┓┏━┓╻");
+    expect(text).not.toContain("r a l p h l o o p");
     expect(text).toContain("my prompt");
     expect(text).toContain("reading files");
     expect(rows.length).toBeLessThanOrEqual(17);
@@ -994,8 +996,8 @@ describe("buildContentCells adaptive height", () => {
       14,
     );
     const text = toText(rows);
-    expect(text).not.toContain("┏━╸┏━┓");
-    expect(text).not.toContain("g n h f");
+    expect(text).not.toContain("┏━┓┏━┓╻");
+    expect(text).not.toContain("r a l p h l o o p");
     expect(text).not.toContain("reading files");
     expect(text).toContain("my prompt");
     expect(text).toContain("00:01:00");
@@ -1012,8 +1014,8 @@ describe("buildContentCells adaptive height", () => {
       9,
     );
     const text = toText(rows);
-    expect(text).not.toContain("┏━╸┏━┓");
-    expect(text).not.toContain("g n h f");
+    expect(text).not.toContain("┏━┓┏━┓╻");
+    expect(text).not.toContain("r a l p h l o o p");
     expect(text).not.toContain("reading files");
     expect(text).not.toContain("my prompt");
     expect(text).toContain("00:01:00");
@@ -1418,7 +1420,7 @@ describe("Renderer terminal title", () => {
 
       const titles = extractTerminalTitles(stdoutWrite);
       expect(titles.at(-1)).toMatch(
-        /^gnhf [🌑🌒🌓🌔🌕🌖🌗🌘] · 21K total · 12K in · 8K out · 12 commits$/u,
+        /^ralphloop [🌑🌒🌓🌔🌕🌖🌗🌘] · 21K total · 12K in · 8K out · 12 commits$/u,
       );
 
       renderer.stop();
@@ -1484,7 +1486,7 @@ describe("Renderer terminal title", () => {
       const titles = extractTerminalTitles(stdoutWrite);
       const meaningfulTitles = titles.filter((t: string) => t !== "");
       expect(meaningfulTitles.at(-1)).toBe(
-        "gnhf stopped · 21K total · 12K in · 8K out · 12 commits",
+        "ralphloop stopped · 21K total · 12K in · 8K out · 12 commits",
       );
     } finally {
       restoreStdoutTty();

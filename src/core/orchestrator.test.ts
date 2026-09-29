@@ -6,7 +6,7 @@ vi.mock("./git.js", async (importOriginal) => {
     ...actual,
     commitAll: vi.fn(),
     getBranchCommitCount: vi.fn(() => 0),
-    getCurrentBranch: vi.fn(() => "gnhf/run-abc"),
+    getCurrentBranch: vi.fn(() => "ralphloop/run-abc"),
     getHeadCommit: vi.fn(() => "head123"),
     pushCurrentBranch: vi.fn(),
     resetHard: vi.fn(),
@@ -72,16 +72,16 @@ const config: Config = {
 
 const runInfo: RunInfo = {
   runId: "run-abc",
-  runDir: "/repo/.gnhf/runs/run-abc",
-  promptPath: "/repo/.gnhf/runs/run-abc/prompt.md",
-  notesPath: "/repo/.gnhf/runs/run-abc/notes.md",
-  schemaPath: "/repo/.gnhf/runs/run-abc/output-schema.json",
-  logPath: "/repo/.gnhf/runs/run-abc/gnhf.log",
+  runDir: "/repo/.ralphloop/runs/run-abc",
+  promptPath: "/repo/.ralphloop/runs/run-abc/prompt.md",
+  notesPath: "/repo/.ralphloop/runs/run-abc/notes.md",
+  schemaPath: "/repo/.ralphloop/runs/run-abc/output-schema.json",
+  logPath: "/repo/.ralphloop/runs/run-abc/ralphloop.log",
   baseCommit: "base123",
-  baseCommitPath: "/repo/.gnhf/runs/run-abc/base-commit",
-  stopWhenPath: "/repo/.gnhf/runs/run-abc/stop-when",
+  baseCommitPath: "/repo/.ralphloop/runs/run-abc/base-commit",
+  stopWhenPath: "/repo/.ralphloop/runs/run-abc/stop-when",
   stopWhen: undefined,
-  commitMessagePath: "/repo/.gnhf/runs/run-abc/commit-message",
+  commitMessagePath: "/repo/.ralphloop/runs/run-abc/commit-message",
   commitMessage: undefined,
 };
 
@@ -1277,7 +1277,7 @@ describe("Orchestrator stop limits", () => {
         .mockResolvedValueOnce(createSuccessResult("needs hook repair"))
         .mockRejectedValueOnce(
           new PermanentAgentError(
-            "claude credit balance too low - see gnhf.log",
+            "claude credit balance too low - see ralphloop.log",
             "claude exited with code 1: Credit balance is too low",
           ),
         ),
@@ -2247,7 +2247,7 @@ describe("Orchestrator backoff behavior", () => {
 
     // Deliberately shorter than the 60s first-error backoff: the window is
     // decided against the moment the provider reported it, so a pause of
-    // gnhf's own can never consume a reset time that was usable when it
+    // ralphloop's own can never consume a reset time that was usable when it
     // arrived and abort a run whose window has genuinely returned.
     const resumeAt = new Date(Date.now() + 40_000);
     let callCount = 0;
@@ -2348,7 +2348,7 @@ describe("Orchestrator backoff behavior", () => {
       expect.stringContaining("no reset time"),
     );
     // cli.ts reports `lastAgentError ?? lastMessage` in the permanent stdout
-    // summary, so the agent's own error must not displace the reason gnhf
+    // summary, so the agent's own error must not displace the reason ralphloop
     // stopped to protect the user's credits.
     const finalState = orchestrator.getState();
     expect(finalState.lastAgentError ?? finalState.lastMessage).toContain(
@@ -2363,7 +2363,7 @@ describe("Orchestrator backoff behavior", () => {
       name: "claude",
       run: vi.fn(async () => {
         throw new PermanentAgentError(
-          "claude credit balance too low - see gnhf.log",
+          "claude credit balance too low - see ralphloop.log",
           "claude exited with code 1: Credit balance is too low",
         );
       }),
@@ -2386,12 +2386,12 @@ describe("Orchestrator backoff behavior", () => {
     expect(mockAppendNotes).not.toHaveBeenCalled();
     expect(mockResetHard).toHaveBeenCalledTimes(1);
     expect(abort).toHaveBeenCalledWith(
-      "claude credit balance too low - see gnhf.log",
+      "claude credit balance too low - see ralphloop.log",
     );
     expect(orchestrator.getState()).toMatchObject({
       status: "aborted",
       consecutiveErrors: 0,
-      lastMessage: "claude credit balance too low - see gnhf.log",
+      lastMessage: "claude credit balance too low - see ralphloop.log",
       lastAgentError: "claude exited with code 1: Credit balance is too low",
     });
   });
