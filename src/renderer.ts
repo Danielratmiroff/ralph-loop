@@ -238,6 +238,24 @@ export function renderAgentMessageCells(
   return lines.map((l) => (l ? textToCells(l, "dim") : []));
 }
 
+const MAX_RECENT_SUMMARIES = 3;
+
+export function renderRecentSummariesCells(
+  iterations: { number: number; success: boolean; summary: string }[],
+): Cell[][] {
+  const rows: Cell[][] = [];
+  for (const iter of iterations.slice(-MAX_RECENT_SUMMARIES)) {
+    const mark = iter.success ? "✓" : "✗";
+    const text = `${mark} ${iter.number}: ${iter.summary.replace(/\s+/g, " ").trim()}`;
+    const clipped =
+      text.length > MAX_MSG_LINE_LEN
+        ? `${text.slice(0, MAX_MSG_LINE_LEN - 1)}…`
+        : text;
+    rows.push(textToCells(clipped, "dim"));
+  }
+  return rows;
+}
+
 export function renderMoonStripCells(
   iterations: { success: boolean }[],
   isRunning: boolean,
@@ -530,6 +548,7 @@ export function buildContentCells(
 ): Cell[][] {
   const isRunning = state.status === "running" || state.status === "waiting";
   const moonRows = renderMoonStripCells(state.iterations, isRunning, now);
+  const recentRows = renderRecentSummariesCells(state.iterations);
   const maxRows = availableHeight ?? Infinity;
   if (maxRows <= 0) return [];
 
@@ -569,6 +588,7 @@ export function buildContentCells(
         state.lastAgentError,
       ),
     ],
+    recent: (recentRows.length > 0 ? [[], ...recentRows] : []) as Cell[][],
     moon: [[], [], ...moonRows] as Cell[][],
   };
 
@@ -579,10 +599,12 @@ export function buildContentCells(
     ...sections.prompt,
     ...sections.stats,
     ...sections.agent,
+    ...sections.recent,
     ...sections.moon,
   ];
 
   const optionalSections: Array<keyof typeof sections> = [
+    "recent",
     "art",
     "eyebrow",
     "agent",
@@ -608,6 +630,7 @@ export function buildContentCells(
       ...sections.prompt,
       ...sections.stats,
       ...sections.agent,
+      ...sections.recent,
     ].filter((row) => row.length > 0);
     const allowedMoonRows = Math.max(0, maxRows - nonMoonRows.length);
     const visibleMoonRows =

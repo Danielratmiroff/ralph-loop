@@ -850,7 +850,30 @@ describe("buildContentCells adaptive height", () => {
     expect(text).toContain("my prompt");
     expect(text).toContain("reading files");
     expect(text).toContain("00:01:00");
-    expect(rows).toHaveLength(22);
+    expect(rows).toHaveLength(24);
+  });
+
+  it("shows the latest iteration summaries and drops them first when short", () => {
+    const iterations = [1, 2, 3, 4].map((n) =>
+      createIteration({ number: n, summary: `did thing ${n}` }),
+    );
+    const full = toText(
+      buildContentCells("p", "claude", { ...state, iterations }, "00:01:00", 0),
+    );
+    expect(full).not.toContain("did thing 1");
+    expect(full).toContain("✓ 2: did thing 2");
+    expect(full).toContain("✓ 4: did thing 4");
+    const short = toText(
+      buildContentCells(
+        "p",
+        "claude",
+        { ...state, iterations },
+        "00:01:00",
+        0,
+        14,
+      ),
+    );
+    expect(short).not.toContain("did thing 4");
   });
 
   it("shows finished iterations between the timer and token counts", () => {
