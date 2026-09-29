@@ -684,7 +684,7 @@ function serializeConfig(config: Config): string {
     '#   staging: "node /opt/staging/agent.mjs"',
     "",
     "# Commit message convention (optional)",
-    "# Defaults to: gnhf <iteration>: <summary>",
+    "# Defaults to: <summary>",
     "# Use Conventional Commits semantic-release headers:",
     "# commitMessage:",
     "#   preset: conventional",

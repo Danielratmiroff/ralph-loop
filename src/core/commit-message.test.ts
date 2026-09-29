@@ -12,19 +12,15 @@ function commitMessageOutput(output: CommitMessageTestOutput): AgentOutput {
 }
 
 describe("buildCommitMessage", () => {
-  it("renders the default gnhf commit subject without GitHub issue markers", () => {
-    const message = buildCommitMessage(
-      undefined,
-      {
-        success: true,
-        summary: "add retry coverage",
-        key_changes_made: [],
-        key_learnings: [],
-      },
-      { iteration: 3 },
-    );
+  it("renders the default commit subject without GitHub issue markers", () => {
+    const message = buildCommitMessage(undefined, {
+      success: true,
+      summary: "add retry coverage",
+      key_changes_made: [],
+      key_learnings: [],
+    });
 
-    expect(message).toBe("gnhf 3: add retry coverage");
+    expect(message).toBe("add retry coverage");
   });
 
   it("renders a Conventional Commits header with a scope", () => {
@@ -38,7 +34,6 @@ describe("buildCommitMessage", () => {
         type: "fix",
         scope: "core",
       }),
-      { iteration: 1 },
     );
 
     expect(message).toBe("fix(core): handle empty output");
@@ -55,7 +50,6 @@ describe("buildCommitMessage", () => {
         type: "docs",
         scope: "",
       }),
-      { iteration: 1 },
     );
 
     expect(message).toBe("docs: refresh docs");
@@ -70,7 +64,6 @@ describe("buildCommitMessage", () => {
         key_changes_made: [],
         key_learnings: [],
       },
-      { iteration: 2 },
     );
 
     expect(message).toBe("chore: tidy internal naming");
@@ -86,7 +79,6 @@ describe("buildCommitMessage", () => {
         key_learnings: [],
         type: "wip",
       }),
-      { iteration: 2 },
     );
 
     expect(message).toBe("chore: tidy internal naming");
@@ -102,7 +94,6 @@ describe("buildCommitMessage", () => {
         key_learnings: [],
         type: "feat",
       }),
-      { iteration: 4 },
     );
 
     expect(message).toBe("feat: add parser with extra spacing");

@@ -195,7 +195,7 @@ describe("gnhf e2e cursor agent", () => {
       "hello from cursor mock\n",
     );
     expect(git(["rev-list", "--count", "HEAD"], cwd)).toBe("2");
-    expect(git(["log", "-1", "--format=%s"], cwd)).toContain("gnhf 1:");
+    expect(git(["log", "-1", "--format=%s"], cwd)).not.toContain("gnhf");
 
     const spawnEvent = readJsonLines(mockLogPath).find(
       (entry) => entry.event === "spawn",

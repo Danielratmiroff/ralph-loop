@@ -6,10 +6,6 @@ export interface CommitMessageConfig {
   preset: CommitMessagePreset;
 }
 
-export interface CommitMessageContext {
-  iteration: number;
-}
-
 export interface CommitMessagePromptField {
   name: string;
   description: string;
@@ -93,10 +89,9 @@ function resolveConventionalScope(value: unknown): string {
 export function buildCommitMessage(
   config: CommitMessageConfig | undefined,
   output: AgentOutput,
-  context: CommitMessageContext,
 ): string {
   if (config === undefined) {
-    return collapseHeader(`gnhf ${context.iteration}: ${output.summary}`);
+    return collapseHeader(output.summary);
   }
 
   const commitOutput = output as AgentOutputWithCommitMessageFields;

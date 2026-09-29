@@ -275,7 +275,7 @@ describe("gnhf acp e2e", () => {
 
       expect(result.code).toBe(0);
       expect(git(["rev-list", "--count", "HEAD"], cwd)).toBe("2");
-      expect(git(["log", "-1", "--format=%s"], cwd)).toContain("gnhf 1:");
+      expect(git(["log", "-1", "--format=%s"], cwd)).not.toContain("gnhf");
 
       const mockEvents = readJsonLines(mockLogPath).map((e) => e.event);
       expect(mockEvents).toContain("agent:initialize");

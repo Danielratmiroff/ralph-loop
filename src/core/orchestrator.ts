@@ -788,9 +788,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
     const keyLearnings = toStringArray(output.key_learnings);
     try {
       commitAll(
-        buildCommitMessage(this.config.commitMessage, output, {
-          iteration: this.state.currentIteration,
-        }),
+        buildCommitMessage(this.config.commitMessage, output),
         this.cwd,
       );
     } catch (error) {

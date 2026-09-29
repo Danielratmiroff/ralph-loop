@@ -181,7 +181,7 @@ describe("Orchestrator output normalization", () => {
       ["learning"],
     );
     expect(mockCommitAll).toHaveBeenCalledTimes(1);
-    expect(mockCommitAll).toHaveBeenCalledWith("gnhf 1: done", "/repo");
+    expect(mockCommitAll).toHaveBeenCalledWith("done", "/repo");
     expect(orchestrator.getState().status).toBe("aborted");
   });
 
