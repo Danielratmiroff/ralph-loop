@@ -65,6 +65,10 @@ export function getCommitMessagePromptFields(
   return CONVENTIONAL_COMMIT_MESSAGE_FIELDS;
 }
 
+// Git rejects empty commit messages, so a blank agent summary must still
+// produce a committable subject.
+const DEFAULT_SUMMARY = "update";
+
 function collapseHeader(message: string): string {
   return message.replace(/\s+/g, " ").trim();
 }
@@ -91,11 +95,13 @@ export function buildCommitMessage(
   output: AgentOutput,
 ): string {
   if (config === undefined) {
-    return collapseHeader(output.summary);
+    return collapseHeader(output.summary) || DEFAULT_SUMMARY;
   }
 
   const commitOutput = output as AgentOutputWithCommitMessageFields;
   const type = resolveConventionalType(commitOutput.type);
   const scope = resolveConventionalScope(commitOutput.scope);
-  return collapseHeader(`${type}${scope}: ${output.summary}`);
+  return collapseHeader(
+    `${type}${scope}: ${collapseHeader(output.summary) || DEFAULT_SUMMARY}`,
+  );
 }

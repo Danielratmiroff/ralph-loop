@@ -98,4 +98,19 @@ describe("buildCommitMessage", () => {
 
     expect(message).toBe("feat: add parser with extra spacing");
   });
+
+  it("falls back to a non-empty subject when the summary is blank", () => {
+    const output = commitMessageOutput({
+      success: true,
+      summary: "  \n ",
+      key_changes_made: [],
+      key_learnings: [],
+      type: "fix",
+    });
+
+    expect(buildCommitMessage(undefined, output)).toBe("update");
+    expect(buildCommitMessage({ preset: "conventional" }, output)).toBe(
+      "fix: update",
+    );
+  });
 });
