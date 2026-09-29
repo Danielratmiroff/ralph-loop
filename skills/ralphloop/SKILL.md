@@ -50,16 +50,16 @@ Examples:
 
 ## Launch
 
-Check the installed CLI before relying on flags:
+Check the installed CLI (the command is `rl`) before relying on flags:
 
 ```bash
-ralphloop --help
+rl --help
 ```
 
 Known shape:
 
 ```bash
-ralphloop \
+rl \
   --agent <agent> \
   --max-iterations <n> \
   --stop-when "<observable completion condition>" \
@@ -149,7 +149,7 @@ Do not ask what to review first. Reconstruct state:
 git status --short
 git branch --show-current
 git log --oneline --decorate --max-count=20
-pgrep -fl 'ralphloop|claude|codex|copilot|cursor-agent|opencode|rovodev' || true
+pgrep -fl 'ralphloop|(^|/)rl( |$)|claude|codex|copilot|cursor-agent|opencode|rovodev' || true
 ```
 
 Inspect likely RALPHLOOP branches, notes, logs, terminal sessions, and changed files. If a RALPHLOOP process is still running, report that first.
@@ -158,7 +158,7 @@ Report mode, agent, branch, status, changes, verification, stop-condition result
 
 ## Agent
 
-The supported `--agent` roster comes from `ralphloop --help`; the [Agents table](../../README.md#agents) in the RALPHLOOP README owns per-agent requirements. Do not hard-code the roster.
+The supported `--agent` roster comes from `rl --help`; the [Agents table](../../README.md#agents) in the RALPHLOOP README owns per-agent requirements. Do not hard-code the roster.
 
 - Default to the agent the user explicitly requested, or the one already configured and authenticated locally.
 - `codex`: repo-aware code work or review-heavy tasks.
