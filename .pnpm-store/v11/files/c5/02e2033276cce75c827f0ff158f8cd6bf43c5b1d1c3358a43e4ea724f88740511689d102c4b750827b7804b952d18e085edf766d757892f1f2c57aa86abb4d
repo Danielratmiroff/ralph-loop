@@ -1,0 +1,8 @@
+import { type BigIntStats } from "node:fs";
+import { type DirectoryModeOwner } from "./directory-mode-owner.js";
+/** Real Node only: injected filesystem adapters must retain descriptor-chmod semantics. */
+export declare function pinNodeDirectoryForMode(dirPath: string, options?: {
+    expectedIdentity?: BigIntStats;
+    ownerUid?: number;
+}): Promise<DirectoryModeOwner>;
+//# sourceMappingURL=directory-mode-node.d.ts.map

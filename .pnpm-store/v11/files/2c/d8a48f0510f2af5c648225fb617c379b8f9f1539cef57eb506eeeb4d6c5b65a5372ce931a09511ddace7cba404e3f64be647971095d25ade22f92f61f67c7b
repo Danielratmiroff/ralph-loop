@@ -1,0 +1,161 @@
+import { syncFileBestEffort, syncFileBestEffortSync } from "./file-sync.js";
+import syncFs, {} from "node:fs";
+import fs, {} from "node:fs/promises";
+import { FsSafeError } from "./errors.js";
+import { sameFileIdentity } from "./file-identity.js";
+import { inspectFileIdentity, inspectFileIdentitySync } from "./strict-file-identity.js";
+import { assertOwnedDirectory, ownDirectoryMode } from "./directory-mode-owner.js";
+export async function syncDirectoryBestEffort(fsModule, dirPath) {
+    let handle;
+    try {
+        handle = await fsModule.open(dirPath, "r");
+        await handle.sync();
+    }
+    catch {
+        // Best-effort on platforms/filesystems that do not support directory fsync.
+    }
+    finally {
+        await handle?.close().catch(() => undefined);
+    }
+}
+export function syncDirectoryBestEffortSync(fsModule, dirPath) {
+    let fd;
+    try {
+        fd = fsModule.openSync(dirPath, "r");
+        fsModule.fsyncSync(fd);
+    }
+    catch {
+        // Best-effort on platforms/filesystems that do not support directory fsync.
+    }
+    finally {
+        if (fd !== undefined) {
+            try {
+                fsModule.closeSync(fd);
+            }
+            catch {
+                // Best-effort close after directory fsync.
+            }
+        }
+    }
+}
+function directoryOpenFlags() {
+    return (syncFs.constants.O_RDONLY |
+        syncFs.constants.O_DIRECTORY |
+        syncFs.constants.O_NOFOLLOW |
+        syncFs.constants.O_NONBLOCK);
+}
+function assertDirectory(identity, dirPath) {
+    if (identity.isSymbolicLink() || !identity.isDirectory()) {
+        throw new FsSafeError("not-file", `Atomic replace parent must be a real directory: ${dirPath}`);
+    }
+}
+function assertSameDirectory(expected, opened, dirPath) {
+    assertDirectory(opened, dirPath);
+    if (!sameFileIdentity(expected, opened)) {
+        throw new FsSafeError("path-mismatch", `Atomic replace parent changed before its mode could be applied: ${dirPath}`);
+    }
+}
+export async function pinDirectoryForMode(params) {
+    // Node does not enforce POSIX directory modes on Windows, and its directory
+    // descriptors are not consistently openable. mkdir(mode) remains the only
+    // bounded behavior there; never fall back to a pathname chmod.
+    if (process.platform === "win32") {
+        return;
+    }
+    const expected = params.fsModule === fs
+        ? syncFs.lstatSync(params.dirPath) : await params.fsModule.lstat(params.dirPath);
+    assertDirectory(expected, params.dirPath);
+    const handle = await params.fsModule.open(params.dirPath, directoryOpenFlags());
+    try {
+        const owner = ownDirectoryMode({
+            async inspect() {
+                const opened = params.fsModule === fs ? syncFs.fstatSync(handle.fd) : await handle.stat();
+                assertOwnedDirectory(expected, opened);
+                return opened.mode & 0o7777;
+            },
+            chmod: (mode) => handle.chmod(mode),
+            close: () => handle.close(),
+            ignoreChmodError: params.ignoreChmodError,
+        });
+        await owner.verify();
+        return owner;
+    }
+    catch (error) {
+        await handle.close();
+        throw error;
+    }
+}
+export async function applyDirectoryMode(params) {
+    const owner = await pinDirectoryForMode(params);
+    try {
+        await owner?.apply(params.mode);
+    }
+    finally {
+        await owner?.close();
+    }
+}
+export function applyDirectoryModeSync(params) {
+    if (process.platform === "win32") {
+        return;
+    }
+    const expected = params.fsModule.lstatSync(params.dirPath);
+    assertDirectory(expected, params.dirPath);
+    const fd = params.fsModule.openSync(params.dirPath, directoryOpenFlags());
+    try {
+        assertSameDirectory(expected, params.fsModule.fstatSync(fd), params.dirPath);
+        // chmod ignores file-type bits; mask so raw stat modes are tolerated.
+        params.fchmodSync?.(fd, params.mode & 0o7777);
+    }
+    finally {
+        params.fsModule.closeSync(fd);
+    }
+}
+export async function writeTempFile(params) {
+    const handle = await params.fsModule.open(params.tempPath, "wx", params.mode);
+    try {
+        // Custom adapters retain their async-only metadata contract.
+        const inspect = () => params.fsModule === fs
+            ? syncFs.fstatSync(handle.fd, { bigint: true }) : handle.stat({ bigint: true });
+        const identity = await inspectFileIdentity(inspect);
+        params.onIdentity?.(identity);
+        await params.fsModule.writeFile(handle, params.content);
+        await handle.chmod(params.mode);
+        if (params.sync) {
+            await syncFileBestEffort(handle);
+        }
+        await inspectFileIdentity(inspect, identity);
+        return { handle, identity };
+    }
+    catch (error) {
+        try {
+            await handle.close();
+        }
+        catch (closeError) {
+            throw new AggregateError([error, closeError], "Atomic temp write and close failed");
+        }
+        throw error;
+    }
+}
+export function writeTempFileSync(params) {
+    const fd = params.fsModule.openSync(params.tempPath, "wx", params.mode);
+    try {
+        const identity = inspectFileIdentitySync(() => params.fsModule.fstatSync(fd, { bigint: true }));
+        params.onIdentity?.(identity);
+        params.fsModule.writeFileSync(fd, params.content);
+        params.fchmodSync?.(fd, params.mode);
+        if (params.sync) {
+            syncFileBestEffortSync(fd, params.fsModule);
+        }
+        inspectFileIdentitySync(() => params.fsModule.fstatSync(fd, { bigint: true }), identity);
+        return { fd, identity };
+    }
+    catch (error) {
+        try {
+            params.fsModule.closeSync(fd);
+        }
+        catch (closeError) {
+            throw new AggregateError([error, closeError], "Atomic temp write and close failed");
+        }
+        throw error;
+    }
+}

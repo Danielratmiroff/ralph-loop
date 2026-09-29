@@ -1,0 +1,82 @@
+import fsSync from "node:fs";
+import path from "node:path";
+import { FsSafeError } from "./errors.js";
+import { sameFileIdentity } from "./file-identity.js";
+import { inspectFileIdentity } from "./strict-file-identity.js";
+import { isNotFoundPathError } from "./path.js";
+import { directoryComponentNotDirectoryError } from "./root-errors.js";
+export async function createAsyncDirectoryGuard(dir, options) {
+    const stat = options?.bigint ? await inspectDirectoryIdentity(dir) : fsSync.lstatSync(dir);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        throw directoryComponentNotDirectoryError();
+    }
+    return { dir, realPath: fsSync.realpathSync.native(dir), stat };
+}
+export async function assertAsyncDirectoryGuard(guard) {
+    const stat = typeof guard.stat.dev === "bigint" && typeof guard.stat.ino === "bigint"
+        ? await inspectDirectoryIdentity(guard.dir, { dev: guard.stat.dev, ino: guard.stat.ino })
+        : fsSync.lstatSync(guard.dir);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        throw directoryComponentNotDirectoryError();
+    }
+    if (!sameFileIdentity(stat, guard.stat) || fsSync.realpathSync.native(guard.dir) !== guard.realPath) {
+        throw new FsSafeError("path-mismatch", "directory changed during operation");
+    }
+}
+export function createSyncDirectoryGuard(dir) {
+    const stat = fsSync.lstatSync(dir);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        throw directoryComponentNotDirectoryError();
+    }
+    return { dir, realPath: fsSync.realpathSync(dir), stat };
+}
+export function assertSyncDirectoryGuard(guard) {
+    const stat = fsSync.lstatSync(guard.dir);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        throw directoryComponentNotDirectoryError();
+    }
+    if (!sameFileIdentity(stat, guard.stat) || fsSync.realpathSync(guard.dir) !== guard.realPath) {
+        throw new FsSafeError("path-mismatch", "directory changed during operation");
+    }
+}
+export async function createNearestExistingDirectoryGuard(rootReal, targetPath, options = { bigint: false }) {
+    let current = path.resolve(targetPath);
+    const root = path.resolve(rootReal);
+    while (current !== root) {
+        try {
+            return await createAsyncDirectoryGuard(current, options);
+        }
+        catch (error) {
+            if (!isNotFoundPathError(error)) {
+                throw error;
+            }
+            current = path.dirname(current);
+        }
+    }
+    return await createAsyncDirectoryGuard(root, options);
+}
+export function createNearestExistingSyncDirectoryGuard(rootReal, targetPath) {
+    let current = path.resolve(targetPath);
+    const root = path.resolve(rootReal);
+    while (current !== root) {
+        try {
+            return createSyncDirectoryGuard(current);
+        }
+        catch (error) {
+            if (!isNotFoundPathError(error)) {
+                throw error;
+            }
+            current = path.dirname(current);
+        }
+    }
+    return createSyncDirectoryGuard(root);
+}
+// Recovery receipts must retain every identity bit, including on Windows.
+export async function inspectDirectoryIdentity(dir, expected) {
+    return await inspectFileIdentity(async () => {
+        const stat = fsSync.lstatSync(dir, { bigint: true });
+        if (stat.isSymbolicLink() || !stat.isDirectory())
+            throw directoryComponentNotDirectoryError();
+        return stat;
+    }, expected);
+}

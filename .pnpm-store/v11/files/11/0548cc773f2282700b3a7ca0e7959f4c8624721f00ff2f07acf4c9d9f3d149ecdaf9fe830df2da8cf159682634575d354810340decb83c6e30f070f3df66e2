@@ -1,0 +1,53 @@
+import syncFs, { type BigIntStats } from "node:fs";
+import fs, { type FileHandle } from "node:fs/promises";
+import { type AnyAsyncDirectoryGuard } from "./directory-guard.js";
+type AsyncOwnerFileSystem = Pick<typeof fs, "lstat" | "open" | "unlink">;
+type SyncOwnerFileSystem = Pick<typeof syncFs, "closeSync" | "fstatSync" | "lstatSync" | "openSync" | "readFileSync" | "unlinkSync">;
+export declare function cleanupPinnedFilePath(params: {
+    pathname: string;
+    handle: FileHandle;
+    identity?: BigIntStats;
+    parentGuard: AnyAsyncDirectoryGuard;
+}): Promise<void>;
+export declare class AsyncAtomicTempOwner {
+    #private;
+    readonly pathname: string;
+    constructor(pathname: string);
+    start(): void;
+    readonly onIdentity: (identity: BigIntStats) => void;
+    adopt(temp: {
+        handle: FileHandle;
+        identity: BigIntStats;
+    }): void;
+    get identity(): BigIntStats;
+    assertCurrent(fsModule: AsyncOwnerFileSystem, pathname?: string): Promise<void>;
+    assertPublished(fsModule: AsyncOwnerFileSystem, pathname: string, expectedHash?: string): Promise<void>;
+    markRenamed(): void;
+    finish(params: {
+        fsModule: AsyncOwnerFileSystem;
+        originalError?: unknown;
+        throwOnCleanupError: boolean;
+    }): Promise<void>;
+}
+export declare class SyncAtomicTempOwner {
+    #private;
+    readonly pathname: string;
+    constructor(pathname: string);
+    start(): void;
+    readonly onIdentity: (identity: BigIntStats) => void;
+    adopt(temp: {
+        fd: number;
+        identity: BigIntStats;
+    }): void;
+    get identity(): BigIntStats;
+    assertCurrent(fsModule: SyncOwnerFileSystem, pathname?: string): void;
+    assertPublished(fsModule: SyncOwnerFileSystem, pathname: string, expectedHash?: string): void;
+    markRenamed(): void;
+    finish(params: {
+        fsModule: SyncOwnerFileSystem;
+        originalError?: unknown;
+        throwOnCleanupError: boolean;
+    }): void;
+}
+export {};
+//# sourceMappingURL=replace-file-temp-owner.d.ts.map

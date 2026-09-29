@@ -1,0 +1,21 @@
+import syncFs, { type BigIntStats } from "node:fs";
+type AsyncSourceFileSystem = Pick<typeof import("node:fs/promises"), "lstat" | "open">;
+type SyncSourceFileSystem = Pick<typeof syncFs, "closeSync" | "fstatSync" | "lstatSync" | "openSync" | "readSync">;
+export declare function readOwnedCopySource(params: {
+    fsModule: AsyncSourceFileSystem;
+    src: string;
+    expectedIdentity?: BigIntStats;
+}): Promise<{
+    replacement: Buffer;
+    mode: number;
+}>;
+export declare function readOwnedCopySourceSync(params: {
+    fsModule: SyncSourceFileSystem;
+    src: string;
+    expectedIdentity?: BigIntStats;
+}): {
+    replacement: Buffer;
+    mode: number;
+};
+export {};
+//# sourceMappingURL=replace-file-copy-source.d.ts.map

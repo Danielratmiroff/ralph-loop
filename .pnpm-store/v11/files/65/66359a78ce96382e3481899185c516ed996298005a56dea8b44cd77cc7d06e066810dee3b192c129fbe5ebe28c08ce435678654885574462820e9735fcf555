@@ -1,0 +1,24 @@
+import { type ExtractionDeadline } from "./archive-deadline.js";
+import type { AsyncDirectoryGuard } from "./directory-guard.js";
+import type { PublishedWriteIdentity } from "./pinned-write.js";
+import type { Root } from "./root.js";
+export type ArchivePublishedFile = {
+    relativePath: string;
+    identity: PublishedWriteIdentity;
+    guards: readonly AsyncDirectoryGuard[];
+};
+export type ArchivePublishedDirectory = {
+    guard: AsyncDirectoryGuard;
+    parents: readonly AsyncDirectoryGuard[];
+    mode: number;
+};
+export declare function finalizeArchivePublication(params: {
+    targetRoot: Root;
+    destinationGuard: AsyncDirectoryGuard;
+    sourceGuard: AsyncDirectoryGuard;
+    files: readonly ArchivePublishedFile[];
+    directories: readonly ArchivePublishedDirectory[];
+    durable: boolean;
+    deadline?: ExtractionDeadline;
+}): Promise<void>;
+//# sourceMappingURL=archive-durability.d.ts.map

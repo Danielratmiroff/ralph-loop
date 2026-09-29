@@ -1,0 +1,116 @@
+import type { TarMeterLimits } from "./archive-limits.js";
+import type { ArchiveMemberKind } from "./archive-plan.js";
+import type { CopyCloneMode } from "./copy-policy.js";
+export interface NativeFileHash {
+    bytes: number;
+    digest: string;
+}
+export interface NativeFileIdentity {
+    dev: number;
+    ino: number;
+    mode: number;
+    nlink: number;
+    size: number;
+    isFile: boolean;
+    isDirectory: boolean;
+    isSymbolicLink: boolean;
+}
+export interface NativeArchiveEntry {
+    index: number;
+    path: string;
+    kind: ArchiveMemberKind;
+    size: number;
+    mode: number;
+}
+export interface NativeArchivePlanEntry extends NativeArchiveEntry {
+}
+export interface NativeCopyResult {
+    fd: number;
+    bytes: number;
+    errorCode?: string;
+    errorMessage?: string;
+}
+export interface NativeFileCopyResult {
+    fd: number;
+    method: "clone" | "copy-file-range" | "copy";
+    errorCode?: string;
+    errorMessage?: string;
+}
+export interface NativeOpenBeneathResult {
+    fd: number;
+    containment: "kernel-atomic" | "best-effort";
+}
+export interface NativeOwnedTreeRemovalResult {
+    outcome?: "removed" | "preserved";
+    errorCode?: string;
+    errorMessage?: string;
+}
+export interface NativeWindowsAccessControlEntry {
+    sid: string;
+    mask: number;
+    aceType: string;
+    flags: {
+        raw: number;
+        objectInherit: boolean;
+        containerInherit: boolean;
+        noPropagateInherit: boolean;
+        inheritOnly: boolean;
+        inherited: boolean;
+        successfulAccess: boolean;
+        failedAccess: boolean;
+    };
+}
+export interface NativeWindowsSecurityFacts {
+    ownerSid: string;
+    currentUserSid: string;
+    ownerClass: string;
+    worldWritable: boolean;
+    groupWritable: boolean;
+    worldReadable: boolean;
+    groupReadable: boolean;
+    fallbackRequired: boolean;
+    daclPresent: boolean;
+    isLocal: boolean;
+    aceListComplete: boolean;
+    unsupportedAceTypes: number[];
+    aces: NativeWindowsAccessControlEntry[];
+}
+export interface NativeBinding {
+    /** Windows-only byte transfer; callers retain both admitted descriptors until settlement. */
+    copyFileContents?(sourceFd: number, targetFd: number, signal?: AbortSignal): Promise<void>;
+    /** Internal: same private, immutable input ownership as the ZIP buffer reader. */
+    openTarBufferNative(buffer: Buffer, kind: string, limits: TarMeterLimits, signal?: AbortSignal): Promise<{
+        readonly entries: NativeArchiveEntry[];
+        readEntry(index: number, maxBytes: number, signal?: AbortSignal): Promise<Buffer>;
+    }>;
+    /** Internal: input remains private, unpooled and immutable until the reader is released. */
+    openZipBufferNative(buffer: Buffer, limits: TarMeterLimits, signal?: AbortSignal): Promise<{
+        readonly entries: NativeArchiveEntry[];
+        readEntry(index: number, maxBytes: number, signal?: AbortSignal): Promise<Buffer>;
+    }>;
+    readCloneFileMetadata(paths: string[]): Promise<(Buffer | null)[]>;
+    probeTreeClone(parentFd: number): "apfs" | "btrfs" | "refs" | "xfs" | null;
+    cloneTree(sourceFd: number | null, parentFd: number, basename: string, concurrency: number, signal?: AbortSignal): Promise<void>;
+    createStagedFile?(parentFd: number, basename: string): number;
+    stagedFileMatches?(parentFd: number, basename: string, fileFd: number): boolean;
+    removeStagedFile?(parentFd: number, basename: string, fileFd: number): "removed" | "name-absent" | "preserved";
+    copyFileExclusive?(sourceFd: number, parentFd: number, basename: string, clone: CopyCloneMode, maxBytes: number | undefined, signal: AbortSignal | undefined, sync: boolean): Promise<NativeFileCopyResult>;
+    cloneFileExclusive(sourceFd: number, targetRootFd: number, targetRelPath: string): number;
+    copyFileRangeExclusive(sourceFd: number, targetRootFd: number, targetRelPath: string): Promise<NativeCopyResult>;
+    createPrivateDirectory(path: string): void;
+    extractArchiveNative(path: string, kind: string, rootFd: number, plan: NativeArchivePlanEntry[], limits: TarMeterLimits, signal: AbortSignal): Promise<void>;
+    fstatIdentity(fd: number): NativeFileIdentity;
+    inspectArchiveNative(path: string, kind: string, limits: TarMeterLimits, signal: AbortSignal): Promise<NativeArchiveEntry[]>;
+    linkBeneath(sourceRootFd: number, sourceRelPath: string, targetRootFd: number, targetRelPath: string): void;
+    mkdirBeneath(rootFd: number, relPath: string, mode: number): void;
+    openBeneath(rootFd: number, relPath: string, flags: number): NativeOpenBeneathResult;
+    readArchiveEntryNative(path: string, kind: string, requested: string, maxBytes: number, limits: TarMeterLimits, signal: AbortSignal): Promise<Buffer>;
+    readOwnerAndDacl(path: string): NativeWindowsSecurityFacts;
+    ownedTreeRemovalAvailable?(parentFd: number): boolean;
+    removeOwnedTree?(parentFd: number, basename: string, directoryFd: number): Promise<NativeOwnedTreeRemovalResult>;
+    removeOwnedTreeSync?(parentFd: number, basename: string, directoryFd: number): NativeOwnedTreeRemovalResult;
+    renameNoReplace(sourceRootFd: number, sourceRelPath: string, targetRootFd: number, targetRelPath: string): void;
+    renameReplace(sourceRootFd: number, sourceRelPath: string, targetRootFd: number, targetRelPath: string): void;
+    sha256File(fd: number, maxBytes?: number, signal?: AbortSignal): Promise<NativeFileHash>;
+}
+//# sourceMappingURL=native-binding.d.ts.map

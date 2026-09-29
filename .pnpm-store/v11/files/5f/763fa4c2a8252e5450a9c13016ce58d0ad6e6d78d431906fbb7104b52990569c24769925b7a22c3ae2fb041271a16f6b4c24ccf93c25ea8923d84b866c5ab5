@@ -1,0 +1,15 @@
+import { type ResolvedArchiveExtractLimits } from "./archive-limits.js";
+export type ZipRead = {
+    offset: number;
+    length: number;
+};
+export type ZipScan = Generator<ZipRead, number, Buffer>;
+export type ZipDirectoryEntry = {
+    index: number;
+    creatorSystem: number;
+    externalAttributes: number;
+    size: number;
+    path?: string;
+};
+export declare function scanZipDirectory(size: number, limits: ResolvedArchiveExtractLimits, onEntry?: (entry: ZipDirectoryEntry) => void): ZipScan;
+//# sourceMappingURL=archive-zip-directory.d.ts.map

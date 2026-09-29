@@ -1,0 +1,18 @@
+import { Transform, type TransformCallback } from "node:stream";
+import type { TarMeterLimits } from "./archive-limits.js";
+import type { TarEntryInfo } from "./archive-tar.js";
+export type AdmittedTarMember = TarEntryInfo & {
+    offset: number;
+};
+/** Backpressure-aware transport only; all TAR semantics live in the Rust core. */
+export declare class TarParserStream extends Transform {
+    private readonly onMember?;
+    private abi;
+    constructor(limits: TarMeterLimits, onMember?: ((entry: AdmittedTarMember) => void) | undefined);
+    private bytes;
+    private text;
+    _transform(chunk: Buffer, _encoding: BufferEncoding, callback: TransformCallback): void;
+    _flush(callback: TransformCallback): void;
+    _destroy(error: Error | null, callback: (error: Error | null) => void): void;
+}
+//# sourceMappingURL=archive-tar-wasm.d.ts.map

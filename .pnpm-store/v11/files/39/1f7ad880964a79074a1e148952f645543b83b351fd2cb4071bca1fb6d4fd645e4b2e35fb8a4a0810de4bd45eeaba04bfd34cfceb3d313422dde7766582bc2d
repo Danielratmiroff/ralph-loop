@@ -1,0 +1,2 @@
+export declare function resolveWindowsSystemCommand(command: string, env?: NodeJS.ProcessEnv): string;
+//# sourceMappingURL=windows-command.d.ts.map

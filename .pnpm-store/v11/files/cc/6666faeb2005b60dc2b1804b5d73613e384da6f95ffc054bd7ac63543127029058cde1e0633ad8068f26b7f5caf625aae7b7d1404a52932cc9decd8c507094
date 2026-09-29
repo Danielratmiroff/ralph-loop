@@ -1,0 +1,6 @@
+export type SuppressedErrorLike = Error & {
+    error: unknown;
+    suppressed: unknown;
+};
+export declare function createSuppressedError(error: unknown, suppressed: unknown, message: string): SuppressedErrorLike;
+//# sourceMappingURL=suppressed-error.d.ts.map

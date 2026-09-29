@@ -1,0 +1,2 @@
+export declare function syncQueueDirectoryCreation(dir: string, validationBase: string): Promise<void>;
+//# sourceMappingURL=json-durable-queue-directory.d.ts.map

@@ -1,0 +1,2 @@
+export declare function updateCrc32(previous: number, buffer: Buffer): number;
+//# sourceMappingURL=archive-crc32.d.ts.map

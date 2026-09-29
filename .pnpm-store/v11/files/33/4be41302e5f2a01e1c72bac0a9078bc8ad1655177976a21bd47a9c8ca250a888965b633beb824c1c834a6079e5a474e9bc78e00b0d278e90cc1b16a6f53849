@@ -1,0 +1,1 @@
+{"version":3,"file":"sidecar-lock-root.d.ts","sourceRoot":"","sources":["../src/sidecar-lock-root.ts"],"names":[],"mappings":"AAKA,OAAO,KAAK,EAAE,UAAU,EAAE,IAAI,EAAE,MAAM,gBAAgB,CAAC;AAGvD,wBAAsB,eAAe,CACnC,QAAQ,EAAE,IAAI,EACd,QAAQ,EAAE,MAAM,EAChB,kBAAkB,CAAC,EAAE,UAAU,GAAG,SAAS,EAC3C,aAAa,CAAC,EAAE,CAAC,KAAK,EAAE,OAAO,KAAK,IAAI,GACvC,OAAO,CAAC,UAAU,GAAG,IAAI,CAAC,CAuD5B"}

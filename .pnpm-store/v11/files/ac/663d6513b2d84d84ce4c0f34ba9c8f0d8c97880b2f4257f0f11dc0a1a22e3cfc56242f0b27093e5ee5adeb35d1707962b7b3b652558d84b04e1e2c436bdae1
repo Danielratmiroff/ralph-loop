@@ -1,0 +1,4 @@
+import { Transform } from "node:stream";
+export declare function createMaxBytesTransform(maxBytes: number): Transform;
+export declare function createByteLimitTransform(maxBytes: number, overflowError: (bytes: number) => Error): Transform;
+//# sourceMappingURL=bounded-read-stream.d.ts.map

@@ -1,0 +1,8 @@
+import type { ExtractionDeadline } from "./archive-deadline.js";
+import { type ResolvedArchiveExtractLimits } from "./archive-limits.js";
+import { type ZipDirectoryEntry } from "./archive-zip-directory.js";
+/** Admit physical records before a decoder can normalize or collapse names. */
+export declare function admitZipBuffer(input: Uint8Array, limits: ResolvedArchiveExtractLimits): number;
+/** The extraction input is already private and staged; read only bounded metadata. */
+export declare function admitZipFile(archivePath: string, limits: ResolvedArchiveExtractLimits, deadline: ExtractionDeadline, onEntry?: (entry: ZipDirectoryEntry) => void): Promise<number>;
+//# sourceMappingURL=archive-zip-admission.d.ts.map

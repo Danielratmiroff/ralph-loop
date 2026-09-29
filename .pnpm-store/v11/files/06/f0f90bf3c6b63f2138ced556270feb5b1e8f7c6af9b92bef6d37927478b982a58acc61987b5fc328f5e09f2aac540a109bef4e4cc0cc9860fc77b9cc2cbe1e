@@ -1,0 +1,1 @@
+{"version":3,"file":"root-path-symlink.d.ts","sourceRoot":"","sources":["../src/root-path-symlink.ts"],"names":[],"mappings":"AASA,KAAK,wBAAwB,GAAG;IAC9B,gBAAgB,CAAC,EAAE,OAAO,CAAC;CAC5B,CAAC;AAiBF,wBAAsB,qBAAqB,CACzC,WAAW,EAAE,MAAM,EACnB,OAAO,GAAE,wBAA6B,GACrC,OAAO,CAAC,MAAM,CAAC,CAQjB;AAED,wBAAgB,yBAAyB,CACvC,WAAW,EAAE,MAAM,EACnB,OAAO,GAAE,wBAA6B,GACrC,MAAM,CAQR"}

@@ -1,0 +1,6 @@
+import type { FileHandle } from "node:fs/promises";
+export declare function writeAllToFile(target: FileHandle | number, data: string | Uint8Array, options?: {
+    encoding?: BufferEncoding;
+    assertBeforeMutation?: () => void;
+}): Promise<void>;
+//# sourceMappingURL=write-file-handle.d.ts.map

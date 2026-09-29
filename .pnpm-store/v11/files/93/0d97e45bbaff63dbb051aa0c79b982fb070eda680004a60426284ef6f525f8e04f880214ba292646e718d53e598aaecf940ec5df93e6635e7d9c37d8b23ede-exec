@@ -1,0 +1,270 @@
+#!/usr/bin/env node
+import { appendFileSync, readFileSync } from "node:fs";
+import { Readable, Writable } from "node:stream";
+import { AgentSideConnection, PROTOCOL_VERSION, ndJsonStream } from "@agentclientprotocol/sdk";
+import { Command } from "commander";
+import { randomBytes } from "node:crypto";
+import { join } from "node:path";
+//#region src/mock-agent.ts
+function normalizeToolCallStatus(value) {
+	if (value === "pending" || value === "in_progress" || value === "completed" || value === "failed") return value;
+}
+function randomSessionId() {
+	return Array.from(randomBytes(16)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function sleepWithAbort(ms, signal) {
+	return new Promise((resolve, reject) => {
+		if (signal.aborted) {
+			reject(/* @__PURE__ */ new Error("cancelled"));
+			return;
+		}
+		const timer = setTimeout(resolve, ms);
+		signal.addEventListener("abort", () => {
+			clearTimeout(timer);
+			reject(/* @__PURE__ */ new Error("cancelled"));
+		}, { once: true });
+	});
+}
+var AcpMockAgent = class {
+	sessions = /* @__PURE__ */ new Map();
+	constructor(connection, options) {
+		this.connection = connection;
+		this.options = options;
+	}
+	appendLog(event, details = {}) {
+		if (!this.options.eventLogPath) return;
+		appendFileSync(this.options.eventLogPath, `${JSON.stringify({
+			timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+			pid: process.pid,
+			event,
+			...details
+		})}\n`, "utf-8");
+	}
+	async initialize() {
+		this.appendLog("agent:initialize");
+		return {
+			protocolVersion: PROTOCOL_VERSION,
+			agentCapabilities: { loadSession: false }
+		};
+	}
+	async authenticate() {
+		return {};
+	}
+	async setSessionMode() {
+		return {};
+	}
+	async newSession(params) {
+		const sessionId = randomSessionId();
+		this.sessions.set(sessionId, {
+			cwd: params.cwd,
+			pendingPrompt: null,
+			usageUpdateCount: 0
+		});
+		this.appendLog("agent:newSession", {
+			sessionId,
+			cwd: params.cwd
+		});
+		return { sessionId };
+	}
+	async cancel(params) {
+		this.appendLog("agent:cancel", { sessionId: params.sessionId });
+		this.sessions.get(params.sessionId)?.pendingPrompt?.abort();
+	}
+	async prompt(params) {
+		const session = this.sessions.get(params.sessionId);
+		if (!session) throw new Error(`Unknown session: ${params.sessionId}`);
+		session.pendingPrompt?.abort();
+		const controller = new AbortController();
+		session.pendingPrompt = controller;
+		this.appendLog("agent:prompt:start", { sessionId: params.sessionId });
+		try {
+			if (this.options.promptDelayMs && this.options.promptDelayMs > 0) await sleepWithAbort(this.options.promptDelayMs, controller.signal);
+			if (this.options.runtimeEventsPath) {
+				await this.replayTraceFile(params.sessionId, session.cwd);
+				this.applyAppendFile(session.cwd);
+			} else {
+				await this.emitUsage(params.sessionId, session);
+				await this.emitToolCalls(params.sessionId);
+				this.applyAppendFile(session.cwd);
+				await this.connection.sessionUpdate({
+					sessionId: params.sessionId,
+					update: {
+						sessionUpdate: "agent_message_chunk",
+						content: {
+							type: "text",
+							text: this.options.agentMessage
+						}
+					}
+				});
+			}
+			this.appendLog("agent:prompt:done");
+			return { stopReason: "end_turn" };
+		} catch (error) {
+			if (controller.signal.aborted) {
+				this.appendLog("agent:prompt:cancelled");
+				return { stopReason: "cancelled" };
+			}
+			throw error;
+		} finally {
+			if (session.pendingPrompt === controller) session.pendingPrompt = null;
+		}
+	}
+	async emitUsage(sessionId, session) {
+		if (this.options.usageUpdateUsed === void 0) return;
+		const usageUpdateCount = session.usageUpdateCount + 1;
+		const used = this.options.usageUpdateMode === "cumulative" ? this.options.usageUpdateUsed * usageUpdateCount : this.options.usageUpdateUsed;
+		await this.connection.sessionUpdate({
+			sessionId,
+			update: {
+				sessionUpdate: "usage_update",
+				used,
+				size: this.options.usageUpdateSize
+			}
+		});
+		session.usageUpdateCount = usageUpdateCount;
+		this.appendLog("agent:prompt:usage", { used });
+	}
+	async replayTraceFile(sessionId, cwd) {
+		const events = readFileSync(this.options.runtimeEventsPath, "utf-8").trim().split("\n").map((line) => line.trim()).filter(Boolean).map((line) => JSON.parse(line));
+		let emitted = 0;
+		for (const event of events) {
+			const update = this.traceEventToSessionUpdate(event, cwd);
+			if (!update) continue;
+			await this.connection.sessionUpdate({
+				sessionId,
+				update
+			});
+			emitted += 1;
+		}
+		this.appendLog("agent:trace:replayed", { emitted });
+	}
+	traceEventToSessionUpdate(event, cwd) {
+		if (event.type === "text_delta") return {
+			sessionUpdate: (event.stream === "thought" ? "thought" : "output") === "thought" ? "agent_thought_chunk" : "agent_message_chunk",
+			content: {
+				type: "text",
+				text: String(event.text ?? "").replaceAll("<cwd>", cwd)
+			}
+		};
+		if (event.type === "status" && event.tag === "usage_update") {
+			if (typeof event.used !== "number" || typeof event.size !== "number") return null;
+			return {
+				sessionUpdate: "usage_update",
+				used: event.used,
+				size: event.size
+			};
+		}
+		if (event.type === "tool_call") {
+			const toolCallId = String(event.toolCallId ?? `mock-tool-${Date.now()}`);
+			const status = normalizeToolCallStatus(event.status);
+			const title = event.title !== void 0 ? String(event.title).replaceAll("<cwd>", cwd) : void 0;
+			if (event.tag === "tool_call_update") return {
+				sessionUpdate: "tool_call_update",
+				toolCallId,
+				...title !== void 0 ? { title } : {},
+				...status !== void 0 ? { status } : {}
+			};
+			return {
+				sessionUpdate: "tool_call",
+				toolCallId,
+				kind: "other",
+				title: title ?? "mock tool",
+				...status !== void 0 ? { status } : {}
+			};
+		}
+		return null;
+	}
+	async emitToolCalls(sessionId) {
+		for (let i = 0; i < this.options.toolCallCount; i++) {
+			const toolCallId = `mock-tool-${i}`;
+			await this.connection.sessionUpdate({
+				sessionId,
+				update: {
+					sessionUpdate: "tool_call",
+					toolCallId,
+					kind: "other",
+					title: "mock tool",
+					status: "pending"
+				}
+			});
+			await this.connection.sessionUpdate({
+				sessionId,
+				update: {
+					sessionUpdate: "tool_call_update",
+					toolCallId,
+					status: "completed"
+				}
+			});
+		}
+		if (this.options.toolCallCount > 0) this.appendLog("agent:prompt:tool-calls", { count: this.options.toolCallCount });
+	}
+	applyAppendFile(cwd) {
+		const append = this.options.appendFile;
+		if (!append) return;
+		appendFileSync(join(cwd, append.path), append.text, "utf-8");
+		this.appendLog("workspace:changed", { path: append.path });
+	}
+};
+//#endregion
+//#region src/cli.ts
+function parseUsageUpdateMode(value) {
+	if (value === void 0) return "static";
+	if (value === "static" || value === "cumulative") return value;
+	throw new Error("--usage-update-mode must be either static or cumulative");
+}
+function parseOptionalNumber(name, value) {
+	if (value === void 0) return void 0;
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`${name} must be a non-negative number`);
+	return parsed;
+}
+function parseOptions(raw) {
+	let agentMessage = raw.agentMessage ?? "mock acp response";
+	if (raw.agentMessageJson !== void 0) agentMessage = JSON.stringify(JSON.parse(raw.agentMessageJson));
+	const appendFile = raw.appendFile ? {
+		path: raw.appendFile,
+		text: raw.appendText ?? "- changed by acp-mock\n"
+	} : void 0;
+	return {
+		eventLogPath: raw.eventLog,
+		runtimeEventsPath: raw.replayRuntimeEvents,
+		agentMessage,
+		usageUpdateUsed: parseOptionalNumber("--usage-update-used", raw.usageUpdateUsed),
+		usageUpdateSize: parseOptionalNumber("--usage-update-size", raw.usageUpdateSize) ?? 2e5,
+		usageUpdateMode: parseUsageUpdateMode(raw.usageUpdateMode),
+		toolCallCount: parseOptionalNumber("--tool-call-count", raw.toolCallCount) ?? 0,
+		promptDelayMs: parseOptionalNumber("--prompt-delay-ms", raw.promptDelayMs),
+		appendFile
+	};
+}
+function createProgram() {
+	return new Command().name("acp-mock").description("Run a deterministic ACP mock agent over stdio").option("--event-log <path>", "write lifecycle JSONL logs").option("--replay-runtime-events <path>", "replay normalized runtime events from a JSONL trace").option("--agent-message-json <json>", "emit this JSON object as the final assistant message").option("--agent-message <text>", "emit this text as the final assistant message").option("--usage-update-used <tokens>", "set base used tokens for synthetic usage updates").option("--usage-update-size <tokens>", "usage_update context size", "200000").option("--usage-update-mode <mode>", "usage_update used behavior: static or cumulative", "static").option("--tool-call-count <count>", "emit this many tool_call/tool_call_update pairs", "0").option("--prompt-delay-ms <ms>", "delay the turn until cancelled or the timeout elapses").option("--append-file <path>", "append text to a file relative to the session cwd").option("--append-text <text>", "text to append when --append-file is set").showHelpAfterError();
+}
+function appendProcessReadyLog(options) {
+	if (!options.eventLogPath) return;
+	appendFileSync(options.eventLogPath, `${JSON.stringify({
+		timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+		pid: process.pid,
+		event: "process:ready"
+	})}\n`, "utf-8");
+}
+function main(argv = process.argv) {
+	const program = createProgram();
+	let options;
+	try {
+		program.parse(argv);
+		options = parseOptions(program.opts());
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		process.stderr.write(`acp-mock: ${message}\n`);
+		process.exitCode = 2;
+		return;
+	}
+	new AgentSideConnection((conn) => new AcpMockAgent(conn, options), ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));
+	appendProcessReadyLog(options);
+}
+main();
+//#endregion
+export { main };
+
+//# sourceMappingURL=cli.js.map

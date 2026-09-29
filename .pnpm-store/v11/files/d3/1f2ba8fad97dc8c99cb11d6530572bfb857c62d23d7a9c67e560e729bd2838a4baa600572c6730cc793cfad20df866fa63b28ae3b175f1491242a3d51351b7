@@ -1,0 +1,20 @@
+import type { ArchiveKind } from "./archive-kind.js";
+import type { ExtractArchiveOptions } from "./archive-options.js";
+export type ArchiveMemberKind = "file" | "directory" | "symlink" | "hardlink" | "blocked" | "sparse" | "other";
+export type ArchivePlanEntry = {
+    path: string;
+    kind: "file" | "directory";
+    size: number;
+    mode: number;
+};
+export type ArchivePlanOptions = Pick<ExtractArchiveOptions, "stripComponents" | "limits" | "entryModes" | "entryFilter" | "onFiltered"> & {
+    rootDir?: string;
+    escapeLabel?: string;
+};
+export declare function createArchiveEntryPlanner(params: ArchivePlanOptions, archiveKind: ArchiveKind): (entry: {
+    path: string;
+    kind: ArchiveMemberKind;
+    size: number;
+    mode?: number;
+}) => ArchivePlanEntry | null;
+//# sourceMappingURL=archive-plan.d.ts.map

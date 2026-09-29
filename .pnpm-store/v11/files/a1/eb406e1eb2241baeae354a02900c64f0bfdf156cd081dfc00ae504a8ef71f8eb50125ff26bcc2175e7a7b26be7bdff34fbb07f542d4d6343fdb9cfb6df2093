@@ -1,0 +1,21 @@
+import type { BigIntStats, Stats } from "node:fs";
+export type DirectoryModeChecks = {
+    check?: () => void;
+    beforeChmod?: () => Promise<void>;
+};
+export type DirectoryModeOwner = {
+    verify(check?: () => void): Promise<void>;
+    apply(mode: number, checks?: DirectoryModeChecks): Promise<void>;
+    close(): Promise<void>;
+};
+export declare function assertOwnedDirectory(expected: Stats | BigIntStats, actual: Stats | BigIntStats): void;
+/** Serializes use and close: even a queued path-based fd operation retains its descriptor. */
+export declare function ownDirectoryMode(params: {
+    inspect: () => Promise<number>;
+    chmod: (mode: number) => Promise<void>;
+    prepareChmod?: () => Promise<void>;
+    verifyChmod?: () => Promise<void>;
+    close: () => Promise<void>;
+    ignoreChmodError?: boolean;
+}): DirectoryModeOwner;
+//# sourceMappingURL=directory-mode-owner.d.ts.map

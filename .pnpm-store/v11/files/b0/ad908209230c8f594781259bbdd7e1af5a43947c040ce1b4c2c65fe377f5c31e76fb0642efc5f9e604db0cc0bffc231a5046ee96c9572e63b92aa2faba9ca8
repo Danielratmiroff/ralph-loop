@@ -1,0 +1,86 @@
+import os from "node:os";
+import path from "node:path";
+import { normalizeOptionalString } from "./string-coerce.js";
+function hasHomePrefix(input) {
+    return input === "~" || input.startsWith("~/") ||
+        (path.sep === "\\" && input.startsWith("~\\"));
+}
+function normalize(value) {
+    const trimmed = normalizeOptionalString(value);
+    if (!trimmed) {
+        return undefined;
+    }
+    if (trimmed === "undefined" || trimmed === "null") {
+        return undefined;
+    }
+    return trimmed;
+}
+export function resolveEffectiveHomeDir(env = process.env, homedir = os.homedir) {
+    const raw = resolveRawHomeDir(env, homedir);
+    return raw ? path.resolve(raw) : undefined;
+}
+function resolveRawHomeDir(env, homedir) {
+    const explicitHome = normalize(env.OPENCLAW_HOME);
+    if (!explicitHome) {
+        return resolveRawOsHomeDir(env, homedir);
+    }
+    if (!hasHomePrefix(explicitHome)) {
+        return explicitHome;
+    }
+    // OPENCLAW_HOME starts with "~"; expand against the os home dir. Fall
+    // back to undefined when there is no os home to expand against rather
+    // than returning a raw "~"-prefixed path the caller cannot use.
+    const fallbackHome = resolveRawOsHomeDir(env, homedir);
+    if (!fallbackHome) {
+        return undefined;
+    }
+    return expandHomePrefix(explicitHome, { home: fallbackHome });
+}
+function resolveRawOsHomeDir(env, homedir) {
+    const envHome = normalize(env.HOME);
+    if (envHome) {
+        return envHome;
+    }
+    const userProfile = normalize(env.USERPROFILE);
+    if (userProfile) {
+        return userProfile;
+    }
+    return normalizeSafe(homedir);
+}
+function normalizeSafe(homedir) {
+    try {
+        return normalize(homedir());
+    }
+    catch {
+        return undefined;
+    }
+}
+export function resolveRequiredHomeDir(env = process.env, homedir = os.homedir) {
+    return resolveEffectiveHomeDir(env, homedir) ?? path.resolve(process.cwd());
+}
+export function expandHomePrefix(input, opts) {
+    if (!hasHomePrefix(input)) {
+        return input;
+    }
+    const home = normalize(opts?.home) ??
+        resolveEffectiveHomeDir(opts?.env ?? process.env, opts?.homedir ?? os.homedir);
+    if (!home) {
+        return input;
+    }
+    // Expand before normalizing so a following .. traverses the actual home.
+    return path.join(home, input.slice(2));
+}
+export function resolveHomeRelativePath(input, opts) {
+    if (!input) {
+        return input;
+    }
+    if (!hasHomePrefix(input)) {
+        return path.resolve(input);
+    }
+    const expanded = expandHomePrefix(input, {
+        home: resolveRequiredHomeDir(opts?.env ?? process.env, opts?.homedir ?? os.homedir),
+        env: opts?.env,
+        homedir: opts?.homedir,
+    });
+    return path.resolve(expanded);
+}

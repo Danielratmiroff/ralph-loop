@@ -1,0 +1,40 @@
+import type { Readable } from "node:stream";
+import { type AnyAsyncDirectoryGuard } from "./directory-guard.js";
+import type { FileIdentityStat } from "./file-identity.js";
+import { type CopyFileInput } from "./copy-file-input.js";
+export type PinnedWriteInput = {
+    kind: "buffer";
+    data: string | Buffer;
+    encoding?: BufferEncoding;
+} | {
+    kind: "stream";
+    stream: Readable;
+} | CopyFileInput;
+export type RenameIdentityPolicy = "strict" | "verify-content-with-lock";
+export type PublishedWriteIdentity = Readonly<{
+    dev: bigint;
+    ino: bigint;
+}>;
+export type PinnedWriteParams = {
+    rootPath: string;
+    relativeParentPath: string;
+    basename: string;
+    mkdir: boolean;
+    mode: number;
+    sync?: boolean;
+    overwrite?: boolean;
+    assertBeforeMutation?: () => void;
+    rejectFinalSymlink?: boolean;
+    maxBytes?: number;
+    input: PinnedWriteInput;
+    rootIdentity?: FileIdentityStat;
+    onRenameIdentityMismatch?: "verify-content";
+    onPublished?: (identity: PublishedWriteIdentity) => void;
+    verifyPublished?: (fd: number, identity: PublishedWriteIdentity, parentGuard: AnyAsyncDirectoryGuard) => Promise<void>;
+};
+export declare function runPinnedWriteHelper(params: PinnedWriteParams): Promise<FileIdentityStat>;
+export declare function runPinnedWriteWithRenamePolicy(params: PinnedWriteParams & {
+    targetPath: string;
+    renameIdentity?: RenameIdentityPolicy;
+}): Promise<FileIdentityStat>;
+//# sourceMappingURL=pinned-write.d.ts.map

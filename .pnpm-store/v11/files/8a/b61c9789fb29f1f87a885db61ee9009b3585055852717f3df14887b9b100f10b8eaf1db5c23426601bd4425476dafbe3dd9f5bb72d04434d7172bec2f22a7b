@@ -1,0 +1,2 @@
+export type ContainmentGuarantee = "kernel-atomic" | "best-effort";
+//# sourceMappingURL=containment.d.ts.map

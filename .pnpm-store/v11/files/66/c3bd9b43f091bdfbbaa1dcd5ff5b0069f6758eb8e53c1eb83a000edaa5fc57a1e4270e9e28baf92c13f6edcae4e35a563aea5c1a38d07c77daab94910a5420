@@ -1,0 +1,13 @@
+import { type BigIntStats } from "node:fs";
+import type { AnyAsyncDirectoryGuard } from "./directory-guard.js";
+import type { PublishedWriteIdentity } from "./pinned-write.js";
+export declare function publishCopyStage(params: {
+    temporaryPath: string;
+    targetPath: string;
+    fd: number;
+    identity: BigIntStats;
+    parentGuard: AnyAsyncDirectoryGuard;
+    assertBeforeMutation?: () => void;
+    onPublished?: (identity: PublishedWriteIdentity) => void;
+}): void;
+//# sourceMappingURL=publish-copy-stage.d.ts.map

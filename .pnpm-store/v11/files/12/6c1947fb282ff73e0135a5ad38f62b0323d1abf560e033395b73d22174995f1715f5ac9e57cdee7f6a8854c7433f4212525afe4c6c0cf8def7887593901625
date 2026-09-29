@@ -1,0 +1,104 @@
+import crypto, { randomUUID } from "node:crypto";
+import fsSync from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { assertAsyncDirectoryGuard, createAsyncDirectoryGuard } from "./directory-guard.js";
+import { fitFileNameToPortableComponent, sanitizeUntrustedFileName } from "./filename.js";
+import { applyDirectoryMode } from "./replace-file-descriptor.js";
+import { root } from "./root.js";
+import { assertSafePathPrefix } from "./safe-path-segment.js";
+import { resolveSecureTempRoot } from "./secure-temp-dir.js";
+import { writeCallbackSibling } from "./sibling-staged-file.js";
+import { tempFile } from "./temp-target.js";
+import { getFsSafeTestHooks } from "./test-hooks.js";
+function buildTempPath(dir, tempPrefix) {
+    const safePrefix = assertSafePathPrefix(tempPrefix ?? ".fs-safe-stream", {
+        label: "sibling temp prefix",
+    });
+    return path.join(dir, `${safePrefix}.${process.pid}.${randomUUID()}.tmp`);
+}
+export async function writeSiblingTempFile(options) {
+    const dir = path.resolve(options.dir);
+    await fs.mkdir(dir, { recursive: true, mode: options.dirMode ?? 0o700 });
+    if (options.chmodDir !== false) {
+        await applyDirectoryMode({
+            fsModule: fs,
+            dirPath: dir,
+            mode: options.dirMode ?? 0o700,
+            ignoreChmodError: true,
+        });
+    }
+    return await writeCallbackSibling({
+        tempPath: buildTempPath(dir, options.tempPrefix),
+        write: options.writeTemp,
+        resolveFinalPath: options.resolveFinalPath,
+        mode: options.mode,
+        ignoreModeError: true,
+        syncTempFile: options.syncTempFile === true,
+        syncParentDir: options.syncParentDir === true,
+    });
+}
+function buildSiblingTempPath(params) {
+    const id = crypto.randomUUID();
+    const safePrefix = assertSafePathPrefix(params.tempPrefix, {
+        label: "sibling temp prefix",
+    });
+    const prefix = `${safePrefix}${id}-`;
+    const suffix = ".part";
+    const safeTail = fitFileNameToPortableComponent({
+        prefix,
+        fileName: sanitizeUntrustedFileName(path.basename(params.targetPath), params.fallbackFileName),
+        suffix,
+    });
+    return path.join(path.dirname(params.targetPath), `${prefix}${safeTail}${suffix}`);
+}
+export async function writeViaSiblingTempPath(params) {
+    let rootDir;
+    try {
+        rootDir = fsSync.realpathSync.native(path.resolve(params.rootDir));
+    }
+    catch {
+        rootDir = path.resolve(params.rootDir);
+    }
+    const requestedTargetPath = path.resolve(params.targetPath);
+    let targetPath;
+    try {
+        const realDir = fsSync.realpathSync.native(path.dirname(requestedTargetPath));
+        targetPath = path.join(realDir, path.basename(requestedTargetPath));
+    }
+    catch {
+        targetPath = requestedTargetPath;
+    }
+    const relativeTargetPath = path.relative(rootDir, targetPath);
+    if (!relativeTargetPath ||
+        relativeTargetPath === ".." ||
+        relativeTargetPath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativeTargetPath)) {
+        throw new Error("Target path is outside the allowed root");
+    }
+    const rootGuard = await createAsyncDirectoryGuard(rootDir);
+    const workspace = await tempFile({
+        rootDir: resolveSecureTempRoot({
+            fallbackPrefix: "fs-safe-output",
+            unsafeFallbackLabel: "sibling temp output dir",
+            warn: () => undefined,
+        }),
+        prefix: "fs-safe-output",
+    });
+    try {
+        const tempPath = buildSiblingTempPath({
+            targetPath: path.join(workspace.dir, path.basename(targetPath)),
+            fallbackFileName: params.fallbackFileName ?? "output.bin",
+            tempPrefix: params.tempPrefix ?? ".fs-safe-output-",
+        });
+        await getFsSafeTestHooks()?.beforeSiblingTempWrite?.(tempPath);
+        await params.writeTemp(tempPath);
+        await assertAsyncDirectoryGuard(rootGuard);
+        const targetRoot = await root(rootDir);
+        await targetRoot.copyIn(relativeTargetPath, tempPath, { mkdir: false });
+        await assertAsyncDirectoryGuard(rootGuard);
+    }
+    finally {
+        await workspace.cleanup();
+    }
+}

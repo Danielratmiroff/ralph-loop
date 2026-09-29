@@ -1,0 +1,25 @@
+//#region src/index.d.ts
+interface AppendFileOptions {
+  path: string;
+  text: string;
+}
+type UsageUpdateMode = "static" | "cumulative";
+interface MockAgentCommandOptions {
+  bin?: string;
+  eventLogPath?: string;
+  runtimeEventsPath?: string;
+  agentMessageJson?: unknown;
+  agentMessage?: string;
+  usageUpdateUsed?: number;
+  usageUpdateSize?: number;
+  usageUpdateMode?: UsageUpdateMode;
+  toolCallCount?: number;
+  promptDelayMs?: number;
+  appendFile?: AppendFileOptions;
+}
+declare function mockAgentArgs(options?: MockAgentCommandOptions): string[];
+declare function mockAgentCommand(options?: MockAgentCommandOptions): string;
+declare function readJsonLines(contents: string): Record<string, unknown>[];
+//#endregion
+export { AppendFileOptions, MockAgentCommandOptions, UsageUpdateMode, mockAgentArgs, mockAgentCommand, readJsonLines };
+//# sourceMappingURL=index.d.ts.map

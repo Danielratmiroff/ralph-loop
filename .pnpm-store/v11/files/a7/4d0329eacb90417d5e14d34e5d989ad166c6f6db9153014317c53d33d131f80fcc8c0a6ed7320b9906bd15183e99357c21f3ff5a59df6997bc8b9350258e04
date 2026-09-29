@@ -1,0 +1,8 @@
+export declare function absolutePathWithRawSegments(candidate: string): string;
+export declare function rawPathRelativeToCanonicalRoot(candidate: string, rootCanonicalPath: string, options?: {
+    rejectSymlinks?: boolean;
+    rejectFinalSymlink?: boolean;
+}): string | undefined;
+export declare function resolvePathViaExistingAncestor(targetPath: string): Promise<string>;
+export declare function resolvePathViaExistingAncestorSync(targetPath: string): string;
+//# sourceMappingURL=root-path-existing.d.ts.map

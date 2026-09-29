@@ -1,0 +1,227 @@
+import { classifyArchiveParserError } from "./archive-parser-errors.js";
+import fsSync from "node:fs";
+import fs from "node:fs/promises";
+import { Readable } from "node:stream";
+import { readBoundedAsync } from "./bounded-read.js";
+import { ArchiveFormatError, ArchiveSecurityError, isArchiveFormatErrorMessage, } from "./archive-errors.js";
+import { formatErrorDetail } from "./error-detail.js";
+import { stripArchivePath, validateArchiveEntryPath, } from "./archive-entry.js";
+import { assertPortableArchiveKind, resolveArchiveKind } from "./archive-kind.js";
+import { DEFAULT_MAX_ARCHIVE_BYTES_ZIP, ArchiveLimitError, ARCHIVE_LIMIT_ERROR_CODE, } from "./archive-limits.js";
+import { inspectTar, replayTar } from "./archive-tar-stream.js";
+import { loadZipArchiveWithPreflight } from "./archive-zip-preflight.js";
+import { createZipIntegrityTransform, normalizeZipIntegrityError, } from "./archive-zip-integrity.js";
+import { FsSafeError } from "./errors.js";
+import { inspectFileIdentity } from "./strict-file-identity.js";
+import { resolveReadOpenFlags } from "./read-open-flags.js";
+import { getNativeBinding } from "./native.js";
+import { admitZipBuffer } from "./archive-zip-admission.js";
+import { resolveExtractLimits, resolveTarMeterLimits } from "./archive-limits.js";
+const ZIP_UNIX_FILE_TYPE_MASK = 0o170000;
+const ZIP_UNIX_SYMLINK_TYPE = 0o120000;
+function canonicalEntryPath(entryPath) {
+    validateArchiveEntryPath(entryPath, { escapeLabel: "archive root" });
+    return stripArchivePath(entryPath, 0) ?? "";
+}
+function normalizedRequestedEntry(entryPath) {
+    const normalized = canonicalEntryPath(entryPath);
+    if (!normalized || /[/\\]$/.test(entryPath)) {
+        throw new Error(`archive entry is not a file: ${formatErrorDetail(entryPath)}`);
+    }
+    return normalized;
+}
+async function readStreamBounded(stream, maxBytes) {
+    if (!(Symbol.asyncIterator in Object(stream))) {
+        return await new Promise((resolve, reject) => {
+            const readable = stream;
+            const chunks = [];
+            let total = 0;
+            readable.on("data", (chunk) => {
+                const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+                total += buffer.length;
+                if (total > maxBytes) {
+                    readable.pause();
+                    reject(new ArchiveLimitError(ARCHIVE_LIMIT_ERROR_CODE.ENTRY_EXTRACTED_SIZE_EXCEEDS_LIMIT));
+                    return;
+                }
+                chunks.push(buffer);
+            });
+            readable.once("end", () => resolve(Buffer.concat(chunks, total)));
+            readable.once("error", reject);
+        });
+    }
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of stream) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        total += buffer.length;
+        if (total > maxBytes) {
+            throw new ArchiveLimitError(ARCHIVE_LIMIT_ERROR_CODE.ENTRY_EXTRACTED_SIZE_EXCEEDS_LIMIT);
+        }
+        chunks.push(buffer);
+    }
+    return Buffer.concat(chunks, total);
+}
+async function readArchiveInput(archivePath) {
+    const resolved = fsSync.realpathSync.native(archivePath);
+    const before = await inspectFileIdentity(async () => {
+        const stat = fsSync.lstatSync(archivePath, { bigint: true });
+        if (stat.isSymbolicLink() || !stat.isFile()) {
+            throw new Error(`archive is not a regular file: ${archivePath}`);
+        }
+        return stat;
+    });
+    const handle = await fs.open(resolved, resolveReadOpenFlags());
+    try {
+        const opened = await inspectFileIdentity(async () => {
+            const stat = fsSync.fstatSync(handle.fd, { bigint: true });
+            if (!stat.isFile())
+                throw new Error("archive changed during validation");
+            return stat;
+        }, before);
+        await inspectFileIdentity(async () => {
+            const stat = fsSync.lstatSync(resolved, { bigint: true });
+            if (stat.isSymbolicLink() || !stat.isFile())
+                throw new Error("archive changed during validation");
+            return stat;
+        }, opened);
+        // Native archive workers borrow this private buffer. A pooled allocation could
+        // share its ArrayBuffer with unrelated JS buffers while the worker runs.
+        return await readBoundedAsync(DEFAULT_MAX_ARCHIVE_BYTES_ZIP, async (buffer, length) => (await handle.read(buffer, 0, length, null)).bytesRead, { unpooled: true, observeRegularFileSize: () => {
+                const size = fsSync.fstatSync(handle.fd).size;
+                return Number.isSafeInteger(size) && size >= 0 ? size : undefined;
+            } });
+    }
+    catch (error) {
+        if (error instanceof FsSafeError && error.code === "path-mismatch") {
+            throw new FsSafeError("path-mismatch", "archive changed during validation", { cause: error });
+        }
+        throw error;
+    }
+    finally {
+        await handle.close().catch(() => undefined);
+    }
+}
+async function readZipEntry(buffer, entryPath, maxBytes) {
+    const archive = await loadZipArchiveWithPreflight(buffer, {
+        maxArchiveBytes: DEFAULT_MAX_ARCHIVE_BYTES_ZIP,
+        maxEntryBytes: maxBytes,
+        maxExtractedBytes: maxBytes,
+    });
+    let entry;
+    // JSZip keys retain some aliases and may use Unicode Path metadata. Scan the
+    // effective entries once, after raw ZIP admission has rejected collisions.
+    for (const candidate of Object.values(archive.files)) {
+        if (canonicalEntryPath(candidate.name) !== entryPath)
+            continue;
+        if (entry) {
+            throw new ArchiveSecurityError("entry-path", `archive contains duplicate entry path: ${formatErrorDetail(entryPath)}`);
+        }
+        entry = candidate;
+    }
+    if (!entry || entry.dir) {
+        throw new Error(`archive entry not found: ${formatErrorDetail(entryPath)}`);
+    }
+    if (typeof entry.unixPermissions === "number" &&
+        (entry.unixPermissions & ZIP_UNIX_FILE_TYPE_MASK) === ZIP_UNIX_SYMLINK_TYPE) {
+        throw new Error(`archive entry is a link: ${formatErrorDetail(entryPath)}`);
+    }
+    const stream = typeof entry.nodeStream === "function"
+        ? entry.nodeStream()
+        : Readable.from(await entry.async("nodebuffer"));
+    const integrity = createZipIntegrityTransform(entry);
+    stream.once("error", (error) => integrity.destroy(normalizeZipIntegrityError(error)));
+    return await readStreamBounded(stream.pipe(integrity), maxBytes);
+}
+async function readTarEntry(archiveBuffer, entryPath, maxBytes) {
+    const seenPaths = new Set();
+    let selected;
+    const limits = resolveTarMeterLimits();
+    await inspectTar({ archiveBuffer, limits, onMember(info) {
+            const normalized = canonicalEntryPath(info.path);
+            if (seenPaths.has(normalized)) {
+                throw new ArchiveSecurityError("entry-path", `archive contains duplicate entry path: ${formatErrorDetail(normalized)}`);
+            }
+            seenPaths.add(normalized);
+            if (normalized === entryPath)
+                selected = info;
+        } });
+    if (!selected)
+        throw new Error(`archive entry not found: ${formatErrorDetail(entryPath)}`);
+    if (!["File", "OldFile", "ContiguousFile"].includes(selected.type)) {
+        throw new Error(`archive entry is not a file: ${formatErrorDetail(entryPath)}`);
+    }
+    if (selected.size > maxBytes)
+        throw new ArchiveLimitError(ARCHIVE_LIMIT_ERROR_CODE.ENTRY_EXTRACTED_SIZE_EXCEEDS_LIMIT);
+    let result;
+    await replayTar({ archiveBuffer, limits, members: [selected], async consume(_member, payload) {
+            result = await readStreamBounded(payload, maxBytes);
+        } });
+    return result;
+}
+function selectNativeEntry(manifest, requested, displayPath, physicalCount) {
+    if (physicalCount !== undefined && manifest.length !== physicalCount) {
+        throw new ArchiveSecurityError("entry-path", "zip decoder collapsed entry names");
+    }
+    const seen = new Set();
+    let selected;
+    for (const entry of manifest) {
+        const normalized = canonicalEntryPath(entry.path);
+        if (seen.has(normalized)) {
+            throw new ArchiveSecurityError("entry-path", `archive contains duplicate entry path: ${formatErrorDetail(normalized)}`);
+        }
+        seen.add(normalized);
+        if (normalized === requested) {
+            if (entry.kind !== "file")
+                throw new Error(`archive entry is not a file: ${formatErrorDetail(displayPath)}`);
+            selected = entry;
+        }
+    }
+    if (!selected)
+        throw new Error(`archive entry not found: ${formatErrorDetail(displayPath)}`);
+    return selected;
+}
+function throwNativeReadError(error) {
+    if (error instanceof Error) {
+        const mapped = classifyArchiveParserError(error.message, { cause: error });
+        if (mapped)
+            throw mapped;
+        if (isArchiveFormatErrorMessage(error.message))
+            throw new ArchiveFormatError(error.message, { cause: error });
+    }
+    throw error;
+}
+async function readNativeBufferEntry(native, buffer, kind, requested, displayPath, maxBytes, physicalCount) {
+    try {
+        const signal = new AbortController().signal;
+        const limits = resolveTarMeterLimits();
+        const reader = kind === "zip"
+            ? await native.openZipBufferNative(buffer, limits, AbortSignal.any([signal]))
+            : await native.openTarBufferNative(buffer, kind, limits, AbortSignal.any([signal]));
+        const selected = selectNativeEntry(reader.entries, requested, displayPath, physicalCount);
+        return await reader.readEntry(selected.index, maxBytes, AbortSignal.any([signal]));
+    }
+    catch (error) {
+        throwNativeReadError(error);
+    }
+}
+export async function readArchiveEntry(archivePath, entryPath, options) {
+    if (!Number.isSafeInteger(options.maxBytes) || options.maxBytes < 0) {
+        throw new RangeError("maxBytes must be a non-negative safe integer");
+    }
+    const kind = options.kind ?? resolveArchiveKind(archivePath);
+    if (!kind) {
+        throw new Error(`unsupported archive: ${archivePath}`);
+    }
+    const requestedEntry = normalizedRequestedEntry(entryPath);
+    const buffer = await readArchiveInput(archivePath);
+    const physicalCount = kind === "zip"
+        ? admitZipBuffer(buffer, resolveExtractLimits())
+        : undefined;
+    const native = getNativeBinding();
+    if (native)
+        return await readNativeBufferEntry(native, buffer, kind, requestedEntry, entryPath, options.maxBytes, physicalCount);
+    assertPortableArchiveKind(kind);
+    return kind === "zip" ? await readZipEntry(buffer, requestedEntry, options.maxBytes)
+        : await readTarEntry(buffer, requestedEntry, options.maxBytes);
+}

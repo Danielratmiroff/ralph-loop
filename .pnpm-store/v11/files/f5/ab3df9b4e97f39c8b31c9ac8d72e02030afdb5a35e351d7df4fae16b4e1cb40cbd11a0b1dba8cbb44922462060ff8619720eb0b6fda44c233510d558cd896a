@@ -1,0 +1,31 @@
+import type { BigIntStats, Stats } from "node:fs";
+export type AsyncDirectoryGuard<T extends Stats | BigIntStats = Stats> = {
+    dir: string;
+    realPath: string;
+    stat: T;
+};
+export type AnyAsyncDirectoryGuard = AsyncDirectoryGuard<Stats | BigIntStats>;
+export type SyncDirectoryGuard = {
+    dir: string;
+    realPath: string;
+    stat: Stats;
+};
+export declare function createAsyncDirectoryGuard(dir: string, options: {
+    bigint: true;
+}): Promise<AsyncDirectoryGuard<BigIntStats>>;
+export declare function createAsyncDirectoryGuard(dir: string, options?: {
+    bigint?: false;
+}): Promise<AsyncDirectoryGuard>;
+export declare function createAsyncDirectoryGuard(dir: string, options: {
+    bigint: boolean;
+}): Promise<AnyAsyncDirectoryGuard>;
+export declare function assertAsyncDirectoryGuard(guard: AnyAsyncDirectoryGuard): Promise<void>;
+export declare function createSyncDirectoryGuard(dir: string): SyncDirectoryGuard;
+export declare function assertSyncDirectoryGuard(guard: SyncDirectoryGuard): void;
+export declare function createNearestExistingDirectoryGuard(rootReal: string, targetPath: string): Promise<AsyncDirectoryGuard>;
+export declare function createNearestExistingDirectoryGuard(rootReal: string, targetPath: string, options: {
+    bigint: boolean;
+}): Promise<AnyAsyncDirectoryGuard>;
+export declare function createNearestExistingSyncDirectoryGuard(rootReal: string, targetPath: string): SyncDirectoryGuard;
+export declare function inspectDirectoryIdentity(dir: string, expected?: Pick<BigIntStats, "dev" | "ino">): Promise<BigIntStats>;
+//# sourceMappingURL=directory-guard.d.ts.map

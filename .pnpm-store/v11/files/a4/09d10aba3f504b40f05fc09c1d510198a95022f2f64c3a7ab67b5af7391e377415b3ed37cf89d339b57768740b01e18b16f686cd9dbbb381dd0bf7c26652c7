@@ -1,0 +1,24 @@
+import type { Stats } from "node:fs";
+import { type RootContext } from "./root-context.js";
+import type { DirEntry, PathStat } from "./types.js";
+export declare function pathStatFromStats(stat: Stats): PathStat;
+export declare function listDirectoryPath(root: RootContext, directory: string, withFileTypes: true): Promise<DirEntry[]>;
+export declare function listDirectoryPath(root: RootContext, directory: string, withFileTypes: boolean): Promise<string[] | DirEntry[]>;
+export type RootDirectoryListing = {
+    next(): Promise<{
+        kind: "entry";
+        entry: DirEntry;
+    } | {
+        kind: "limit";
+        name: string;
+    } | undefined>;
+    [Symbol.asyncDispose](): Promise<void>;
+};
+export type RootDirectoryListingOptions = {
+    order: "sorted" | "filesystem";
+    signal?: AbortSignal;
+    snapshot: boolean;
+    admitEntry(): boolean;
+};
+export declare function listDirectoryForWalk(root: RootContext, directory: string, options: RootDirectoryListingOptions): Promise<RootDirectoryListing>;
+//# sourceMappingURL=root-directory-list.d.ts.map

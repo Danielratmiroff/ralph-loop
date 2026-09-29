@@ -1,0 +1,15 @@
+import type { PinnedWriteParams, PublishedWriteIdentity } from "./pinned-write.js";
+export type RootCopyPublicationReceipt = Readonly<{
+    path: string;
+    dev: bigint;
+    ino: bigint;
+}>;
+export declare function createCopyPublicationObserver(path: string, notify?: (receipt: RootCopyPublicationReceipt) => void): {
+    onPublished(identity: PublishedWriteIdentity): void;
+    rethrowObserverFailure(error: unknown): void;
+};
+export declare const onCopyPublication: unique symbol;
+export type CopyPublicationOptions = {
+    [onCopyPublication]?: PinnedWriteParams["verifyPublished"];
+};
+//# sourceMappingURL=copy-publication.d.ts.map

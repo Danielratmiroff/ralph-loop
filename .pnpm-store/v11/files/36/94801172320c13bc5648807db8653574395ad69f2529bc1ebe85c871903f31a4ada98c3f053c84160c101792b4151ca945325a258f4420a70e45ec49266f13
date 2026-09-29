@@ -1,0 +1,41 @@
+import { Transform } from "node:stream";
+import { ArchiveFormatError } from "./archive-errors.js";
+import { hasDeferredEmptyZipData, zipEntryIntegrityMetadata, } from "./archive-zip-entry.js";
+import { updateCrc32 } from "./archive-crc32.js";
+export function normalizeZipIntegrityError(error) {
+    if (error instanceof Error &&
+        error.message.includes("uncompressed data size mismatch")) {
+        return new ArchiveFormatError(`invalid ZIP entry data: ${error.message}`, { cause: error });
+    }
+    return error instanceof Error ? error : new Error(String(error));
+}
+export function createZipIntegrityTransform(entry) {
+    const metadata = zipEntryIntegrityMetadata(entry);
+    const deferredEmpty = hasDeferredEmptyZipData(entry);
+    const expectedCrc32 = deferredEmpty ? 0 : metadata?.crc32;
+    const expectedSize = deferredEmpty ? 0 : metadata?.uncompressedSize;
+    if (typeof expectedCrc32 !== "number" ||
+        !Number.isInteger(expectedCrc32) ||
+        typeof expectedSize !== "number" ||
+        !Number.isSafeInteger(expectedSize) ||
+        expectedSize < 0) {
+        throw new ArchiveFormatError(`zip entry has invalid integrity metadata: ${entry.name}`);
+    }
+    let actualCrc32 = 0;
+    let actualSize = 0;
+    return new Transform({
+        transform(chunk, _encoding, callback) {
+            const buffer = chunk instanceof Buffer ? chunk : Buffer.from(chunk);
+            actualCrc32 = updateCrc32(actualCrc32, buffer);
+            actualSize += buffer.byteLength;
+            callback(null, buffer);
+        },
+        flush(callback) {
+            if (actualSize !== expectedSize || actualCrc32 !== (expectedCrc32 >>> 0)) {
+                callback(new ArchiveFormatError(`zip entry integrity check failed: ${entry.name}`));
+                return;
+            }
+            callback();
+        },
+    });
+}

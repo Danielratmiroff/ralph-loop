@@ -1,0 +1,23 @@
+import { type FileIdentityStat } from "./file-identity.js";
+import { type NativeBinding } from "./native.js";
+import { openStagedDirectory } from "./staged-directory.js";
+export type TempWorkspaceCleanupResult = "removed" | "missing" | "identity-mismatch" | "indeterminate";
+export type TempWorkspaceCleanupSafety = "compatible" | "require-bounded";
+type RetainedDirectory = ReturnType<typeof openStagedDirectory>;
+export declare class TempWorkspaceCleanupCapability {
+    #private;
+    readonly binding: NativeBinding | undefined;
+    readonly parent: RetainedDirectory | undefined;
+    constructor(root: string, safety: TempWorkspaceCleanupSafety);
+    get canRemoveOwnedTree(): boolean;
+    assertCurrent(): void;
+    close(): void;
+}
+export declare class TempWorkspaceCleanupOwner {
+    #private;
+    constructor(dir: string, identity: FileIdentityStat, capability: TempWorkspaceCleanupCapability);
+    cleanup(): Promise<TempWorkspaceCleanupResult>;
+    cleanupSync(): TempWorkspaceCleanupResult;
+}
+export {};
+//# sourceMappingURL=temp-workspace-owner.d.ts.map

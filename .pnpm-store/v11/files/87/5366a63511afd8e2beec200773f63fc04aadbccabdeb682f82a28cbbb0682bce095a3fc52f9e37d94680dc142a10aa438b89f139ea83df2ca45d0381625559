@@ -1,0 +1,19 @@
+import type { ArchiveExtractLimits } from "./archive-limits.js";
+import { type ArchivePlanEntry, type ArchivePlanOptions } from "./archive-plan.js";
+import { type ArchiveEntryFilter, type ArchiveFilteredEntryPolicy } from "./archive-policy.js";
+export type TarEntryInfo = {
+    path: string;
+    type: string;
+    size: number;
+    mode?: number;
+};
+export declare function createTarEntryPlanner(params: ArchivePlanOptions): (entry: TarEntryInfo) => ArchivePlanEntry | null;
+export declare function createTarEntryPreflightChecker(params: {
+    rootDir: string;
+    stripComponents?: number;
+    limits?: ArchiveExtractLimits;
+    escapeLabel?: string;
+    entryFilter?: ArchiveEntryFilter;
+    onFiltered?: ArchiveFilteredEntryPolicy;
+}): (entry: TarEntryInfo) => boolean;
+//# sourceMappingURL=archive-tar.d.ts.map

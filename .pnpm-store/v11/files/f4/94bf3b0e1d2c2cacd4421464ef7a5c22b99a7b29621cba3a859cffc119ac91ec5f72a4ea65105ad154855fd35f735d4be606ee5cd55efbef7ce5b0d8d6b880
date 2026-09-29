@@ -1,0 +1,1 @@
+{"version":3,"file":"suppressed-error.d.ts","sourceRoot":"","sources":["../src/suppressed-error.ts"],"names":[],"mappings":"AAAA,MAAM,MAAM,mBAAmB,GAAG,KAAK,GAAG;IACxC,KAAK,EAAE,OAAO,CAAC;IACf,UAAU,EAAE,OAAO,CAAC;CACrB,CAAC;AAQF,wBAAgB,qBAAqB,CACnC,KAAK,EAAE,OAAO,EACd,UAAU,EAAE,OAAO,EACnB,OAAO,EAAE,MAAM,GACd,mBAAmB,CAgBrB"}

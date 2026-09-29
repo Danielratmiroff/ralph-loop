@@ -1,0 +1,798 @@
+# Changelog
+
+## Unreleased
+
+## 0.10.0 - 2026-09-13
+
+### Highlights
+
+- **Faster ZIP and TAR reads:** read archive members without temporary disk snapshots, reuse admitted native buffers, and reduce integrity-check and decompression overhead while retaining full validation.
+- **Directory copies with native acceleration:** use `copyTree` to prefer or require APFS clones, Btrfs snapshots, or parallel ReFS/XFS reflinks, or choose portable byte copying for controlled, immutable templates and checkouts.
+- **Guarded file copies:** copy from checked Root sources with exclusive publication, cancellation that waits for writes, and optional native cloning; copied data stays independent of its source.
+- **Faster Windows byte copies:** reuse bounded buffers and parallelize directory copying, with native transfers between checked handles in automatic mode.
+- **Reuse buffers for file reads:** new async and sync positional readers fill caller-owned buffers without changing the file's current offset; hashing gains byte limits and cancellation.
+- **Walk large directories incrementally:** Root walks bound metadata work by the entry budget, with an opt-in filesystem-order stream for directories too wide to enumerate up front.
+- **Recheck live access authority:** Root mutations can verify caller-owned leases or cancellation immediately before dispatch, and new symlink policies allow contained parent-directory aliases while rejecting final symlinks.
+
+### Compatibility and upgrade notes
+
+- **Ambiguous paths may now reject.** Reads preserve actual symlink and parent traversal instead of normalizing it away; mutations reject ambiguous symlink/parent combinations. Use the new explicit parent-alias policies when that behavior is intended.
+- **Mutation failures are reported more accurately.** Failed parent-directory checks after fallback moves and removals now reject instead of reporting success. Treat rejection after dispatch as a potentially completed mutation, not proof that nothing changed.
+- **Windows fallback writes honor durability settings.** Root defaults and per-call overrides now apply to JavaScript write/create fallbacks. Use `durable: false` explicitly for reconstructible data when syncing is unnecessary.
+
+### Archive reads
+
+- Retain admitted ZIP input buffers and parsed directories across native inspection and selected-member reads, removing disk staging and archive handoff copies. JavaScript ZIP reads also consume the admitted in-memory archive directly.
+- Retain native TAR input and admitted member offsets. Plain TAR copies only the selected range after complete validation; gzip, zstd, and bzip2 replay bounded decompression with framing, trailer, padding, and limit checks intact. JavaScript TAR/gzip reads also avoid disk staging, with gzip output chunks matched to the WASM input window.
+- Accelerate ZIP integrity checks with Node's native CRC32 on Node 22.2 and newer, retaining checksum validation and compatibility with earlier Node 22 versions. Reuse the strict UTF-8 decoder for TAR metadata without changing filename validation or BOM handling.
+- Give each native archive pass its own abort signal so completed inspection cannot mask an extraction deadline.
+
+### File reads, hashing, and directory walks
+
+- Add `readFileWindowFully()` and `readFileWindowFullySync()` to fill caller-owned buffers through short reads, stop at EOF, and preserve descriptor offsets and ownership. Async cancellation waits for the pending read to settle before the buffer can be reused.
+- Bound speculative allocations for large or exhausted files and accelerate synchronous bounded reads of regular files up to 16 MiB without extra chunk copies; retain one-read async performance through the default Root byte budget.
+- Add byte limits and cooperative cancellation to `sha256File`, preserving descriptor ownership and waiting for native work to stop before rejecting. Batch larger JavaScript hash reads in bounded buffers up to 256 KiB to reduce filesystem calls.
+- Bound Root walk metadata batches by the global entry budget and stop batches at directories and symlinks before descent. Add `order: "filesystem"` for incremental directory streaming with bounded lookahead; sorted traversal remains the default, and unbounded sorted walks retain fast snapshots.
+- Reduce walk overhead by sharing equivalent directory checks and synchronous entry classification, reusing joined paths, and avoiding an extra promise per async entry. Preserve both operation and close failures during disposal, and report a followed symlink target's size consistently in filters and returned metadata.
+- Speed up POSIX containment and filename helpers while preserving traversal rejection, Unicode handling, reserved names, and collision-resistant install names.
+
+### File and directory copying
+
+- Extend `Root.copyIn` with guarded Root sources, exclusive publication, settled cancellation, exact publication receipts, and optional native file cloning while keeping copied data independent. Share `clone: "auto" | "always" | "never"` with `copyTree`; Root keeps its `"never"` default, which uses ordinary reads and writes without clone or copy-offload calls.
+- Add `copyTree` in `@openclaw/fs-safe/copy` with `clone: "auto"` (default), `"always"`, and `"never"` policies. Automatic copying prefers native cloning and falls back to byte copying only when the binding or filesystem capability is unavailable, or cloning cannot cross filesystems; strict cloning never falls back, and ordinary copying avoids clone and copy-offload calls. Destinations must be absent, and cancellation waits for admitted writes to settle.
+- Speed up Windows directory byte copies with bounded parallelism, reusable 1 MiB buffers, and native transfers between checked handles in automatic mode. Honor copy concurrency across portable backends and settle admitted writes before reporting failures or cancellation.
+- Support APFS directory clones, Btrfs subvolume preparation and snapshots, and parallel ReFS/XFS reflinks through `probeTreeClone` and `createCloneSource`. Preserve XFS file and directory extended attributes and ACLs, and restore directory timestamps after APFS bulk cloning.
+- Add batched `readCloneFileMetadata` for APFS clone IDs and file metadata. These are point-in-time observations, not authorization or proof that later contents remain unchanged.
+- Document metadata and filesystem limits: APFS directory cloning does not guarantee descendant ACL preservation or inheritance, Btrfs snapshots omit nested subvolume contents, and ReFS rejects unsupported reparse points and alternate data streams. Portable copying does not promise ownership, ACL, extended-attribute, alternate-stream, or sparse-layout preservation. Callers retain responsibility for source immutability, permission policy, and recovery after a failed or aborted copy.
+
+### Root policies and path safety
+
+- Add composed Root `assertBeforeMutation` callbacks that recheck live caller authority immediately before mutation dispatch, including each buffered-write chunk and direct file removal. Root-level and per-call checks both apply; refusal errors and owned cleanup are preserved across native and JavaScript writers.
+- Add `symlinks: "follow-parents-within-root"` for reads and opt-in `mutationSymlinks` policies, following contained directory aliases while rejecting final symlinks at absolute root entry, open, and publication boundaries.
+- Preserve checked canonical and raw traversal in Root, absolute-path, local-root, and `openRootFile`/`openRootFileSync` reads, including home expansion and parent components that cancel a missing prefix. Validation can no longer normalize away a rejected link or select a different in-root file; local `requireFile` reads retain final-symlink rejection.
+- Pin Root directory identities as bigint values, reject indistinguishable numeric inode replacements, and fail closed after bounded retries when Windows root identity remains unknown. Require a verified opened identity before inheriting an existing write target's mode.
+- Preserve Linux native directory-only open flags so the kernel rejects non-directories before FIFO blocking or truncation, while removing the redundant post-open stat.
+- Expand leading home-directory prefixes before resolving parent segments, so `~/../file` resolves against the home directory's parent; keep other tildes literal. Shorten only the home directory and its descendants in error messages, preserving similarly prefixed sibling paths.
+- Resolve Windows ACL principal names such as `constructor` and `__proto__` as real dictionary keys, preserving SID lookup and translated entries.
+- Preserve Unicode Windows paths during fallback permission inspection by reading structured SID and access-mask facts instead of localized command output.
+
+### Writes, moves, and cleanup
+
+- Check the complete encoded newline before Root append, avoiding duplicated or missing separators in UTF-16LE files on Windows and other platforms.
+- Preserve unowned staging replacements after Windows fallback write or sync failures, and retain exact parent-directory identities so owned partial-file cleanup works even when Windows directory indexes exceed numeric precision.
+- Report failed post-operation parent checks after fallback moves and removals, including moved source parents, instead of silently reporting success.
+- Close publication descriptors when initial inspection fails and relinquish descriptor numbers before potentially failing closes, preventing cleanup from closing a reused descriptor.
+- Keep move-fallback publication and cleanup tied to the initially admitted staging identity, preserve substituted paths after copy failures, and reject writes that make no progress.
+- Preserve recreated temporary paths after exit cleanup observes the original name missing; absence no longer authorizes removal of a later replacement.
+- Allow explicitly authorized filesystem-root descendants in Trash moves and keep reservation-directory names bounded for long source filenames.
+
+### Locks and durable queues
+
+- Honor finite timeouts and retry delays above Node's single-timer limit by rearming bounded timers instead of expiring after approximately 1 ms.
+- Keep zero-delay lock retries finite when a large backoff factor overflows, preserving retry and timeout budgets.
+- Skip invalid delivered-marker names during durable queue batch loading, preserving malformed files while continuing to load valid pending entries.
+- Read durable queue entries through the shared bounded buffer and admitted file-size hint, reducing filesystem calls and chunk copies while retaining exact identity and byte-limit checks.
+
+### Validation and maintenance
+
+- Add a method-by-method benchmark with callable API coverage checks, native/fallback reports, and fixture setup outside measurement.
+- Give the full documentation-build smoke test a bounded longer runtime on slow Windows runners. Validate retained native archive buffers across concurrent reads and forced garbage collection; use efficient byte comparisons in large-buffer coverage tests without relaxing timeouts.
+
+## 0.9.0 - 2026-09-11
+
+**Highlights:** Faster bulk extraction and configurable durability, with Windows filesystem fixes and reliable mixed-version lock cleanup.
+
+- **Compatibility:** `extractArchive` skips file and directory fsync by default for faster bulk imports; pass `durable: true` to restore the previous durability behavior.
+- Add store-level and per-call `durable` options to FileStore writes, streams, copies, and synchronous writes, plus JSON-store defaults, so reconstructible data can skip fsync while preserving guarded atomic publication.
+- Add `Root.copyIn({ durable: false })`, with per-call, root-default, then `true` precedence, to skip file and parent-directory fsync for reconstructible data.
+- Speed up archive extraction by omitting private staging syncs, deferring opted-in publication durability to one bounded file/directory pass, and sharing duplicate destination guards without weakening containment checks.
+- Keep process-exit lock cleanup working when a legacy shared manager lacks reclaim-guard state, continuing through later managers while preserving retained locks; thanks @metahacker.
+- Publish read-only modes such as `0o400` through the Windows JavaScript write fallback by retaining private `0o600` staging and applying the final mode through the retained handle after rename.
+- Preserve Windows file identity across open-induced `ctime` changes during guarded move fallback, and recreate directory junctions without requiring symlink privileges; thanks @giodl73-repo.
+- Extend synchronous metadata observations to archive, copy, publication, move, and directory-mode paths while keeping data and structural I/O asynchronous and preserving native canonical paths.
+- Keep durable publication coverage reliable under filesystem contention by allowing bounded I/O time and draining unfinished operations before fixture cleanup.
+- Refresh JSZip to 3.10.2, Node declarations to 26.5.1, emnapi runtime build tooling to 2.0.0-alpha.5, the Rust hybrid-array dependency to 0.4.15, and pinned CodeQL actions to 4.38.0.
+
+## 0.8.6 - 2026-09-07
+
+**Highlights:** Clearer guidance for atomic writes on Windows exFAT, with a repeatable filesystem compatibility probe.
+
+- Document the existing opt-in locked rename policy for Windows exFAT/FAT32 and add a built-package probe for identity drift, substitution handling, and temporary-prefix isolation; require a trusted, quiescent probe parent and verify its cleanup identity. Thanks @dongsheng123132.
+- Refresh the native zstd decoder to 0.14.0 and compatible Rust and JavaScript development dependencies, and update the pnpm setup action to 6.1.0.
+
+## 0.8.5 - 2026-09-07
+
+### Highlights
+
+- **Strict moves stay strict:** a move started with hardlink rejection keeps that policy throughout asynchronous preparation and copying, even when the caller reuses or changes its options object.
+
+### Safe moves
+
+- Preserve the admitted `sourceHardlinks` policy through staged-copy fallback. A late hardlink is still rejected before destination publication, with the source and its alias preserved, instead of being accepted after an in-flight options change.
+- Document when move policy is captured and how it relates to the existing per-mutation authority checks and destination-publication receipts.
+
+## 0.8.4 - 2026-09-07
+
+### Highlights
+
+- **Faster reads and writes:** metadata checks avoid unnecessary event-loop round-trips while data I/O stays asynchronous; reconstructible data can explicitly opt out of fsync with `durable: false`.
+- **Inspect TARs without extracting:** the new bounded archive inspection API uses the same native/WASM admission and canonical planner as extraction.
+
+### Filesystem performance and durability
+
+- Run metadata checks inside async operations synchronously (microseconds each), cutting event-loop round-trips per read/write while data I/O remains asynchronous and native canonical path spelling is preserved, including Windows short paths.
+- Add `durable` to Root write/create/writeJson/createJson/append options and Root defaults; `durable: false` skips file and parent fsync for reconstructible data (default unchanged: durable).
+
+### Archive inspection and compatibility
+
+- Add bounded `inspectTarArchive` with complete native/WASM admission and the same canonical extraction planner, preserving effective member identities without materializing an output tree.
+- Preserve inherited and getter-backed extraction options on the WASM TAR path, matching native and ZIP handling for destinations, filters, stripping, and modes.
+
+### Validation
+
+- Apply the existing filesystem-test worker cap locally as well as in CI, and drain archive publication fixtures before resetting hooks or cleaning restricted directories after timeouts.
+
+## 0.8.3 - 2026-09-06
+
+### Highlights
+
+- **Safer cancellable moves:** callers can guard every source removal and retain an exact destination-publication receipt for recovery after later failures, including Windows and cross-device fallbacks.
+- **Less filesystem overhead:** reads and writes make fewer calls while preserving their existing boundary and identity checks.
+
+### Move authority and recovery
+
+- Add optional synchronous move authority checks before renames and each copied-source removal, plus an exact bigint destination-publication receipt for caller-owned recovery after later failure; retain cross-device and Windows `EPERM` copy fallbacks and the existing `Promise<void>` contract.
+
+### Filesystem performance and durability
+
+- Reduce filesystem calls per read and write while retaining boundary, hardlink, hook, retry, and post-mutation identity checks.
+- Skip native publication's extra mode-only file fsync for modes that retain owner read/write when staging permissions have not widened; after a crash, a file may retain staged `0o600` instead of the wider requested mode, while restrictive modes retain the extra fsync.
+
+### Tooling and maintenance
+
+- Add 1 MiB read/write and existing-mode inheritance benchmarks, with native-mode metadata and per-case iteration counts.
+- Simplify internals without changing public behavior: remove unused string/home helpers, `resolveUserPath`, `createBoundedReadStream`, `sidecarLockPayloadIsStale`, and `tarManifestEntryCost`; share filesystem utilities and merge private modules.
+
+## 0.8.2 - 2026-09-05
+
+**Highlights:** TAR/gzip extraction now shares one parser across native and fallback modes, improving compatibility with system-tar output while keeping admission and publication guarded.
+
+- Reject reserved archive device names and ignored-space aliases on Windows while preserving ordinary POSIX members, and guard secret reads with the documented `device-path` rejection. Thanks @SebTardif.
+- Unify native and guarded JavaScript TAR admission on one Rust core, bundle its WASM build, and accept strict UTF-8/newline PAX paths without a runtime `tar` dependency; retain bounded framing, raw-field validation, and guarded publication.
+- Accept bounded all-zero gzip container padding from system-tar stdout after validated member trailers, and reject nonzero data hidden after padding on both native and guarded JavaScript TAR routes.
+- Fix `replaceFileAtomic({ dirMode })` rejecting a raw `fs.stat` mode: directory modes are masked to permission bits (`0o7777`) before application and verification, matching chmod semantics; 0.8.0 regressed this input tolerance with `directory final mode could not be verified`.
+- Standardize malformed TAR mode fields on the native zero fallback while preserving ordinary octal, absent, zero, and safe GNU binary modes.
+- Refresh the native binding build tool to `@napi-rs/cli` 3.9.0 and the test/coverage toolchain to Vitest 5.0.0. Thanks @dependabot.
+
+## 0.8.1 - 2026-09-04
+
+- Add `retainOnExit` to sidecar lock acquisition so deliberately retained ownership records (for example fail-closed build locks) survive natural process exit; default process-exit release behavior is unchanged.
+
+## 0.8.0 - 2026-09-04
+
+### Compatibility and upgrade notes
+
+- **Existing secret directories must already have the requested mode.** Wrong permissions now fail the write with `insecure-permissions` instead of being chmod-repaired; audit and fix existing directories before upgrading.
+- **FileStore keys are enforced portably.** Parent-segment and backslash aliases are rejected with `invalid-path` across async reads, `exists`, and `remove`, matching the sync and write paths.
+- **Lock and queue failures now surface.** Durable queue enqueue, migration, and acknowledgement sync failures propagate instead of returning empty or partial success; sidecar payloads above 1 MiB are rejected with `too-large`; async lock retry counts apply even with infinite deadlines. Handle these rejections explicitly.
+- **Create-only visibility is backend-scoped.** The sibling-temp no-visibility guarantee for `create`, `createJson`, and `write({ overwrite: false })` holds with the native binding (`require` mode, or `auto` when the binding loads); the JavaScript fallback claims the final name before content is written.
+
+### Highlights
+
+- **Stricter secret storage:** existing secret directories are never chmod-repaired — wrong permissions fail the write — and directory identity is tracked exactly through private locks and native writes, closing replacement races.
+- **Exact file modes everywhere:** explicit modes, including set-ID bits, are applied after content writes and verified in full at publication, and synchronous appends no longer drop bytes when the kernel writes short.
+- **Restrictive secret modes work:** write-only and no-access files such as `0o200` and `0o000` publish successfully through the writer's retained descriptor, without a readonly reopen or widened permissions.
+- **Resilient locks and queues:** Windows sidecar creation retries genuine denials within the existing budgets, Root-backed locks release on natural process exit, and queue enqueue/migration/ack sync failures propagate instead of returning false success.
+- **Honest backend guarantees:** the no-visibility guarantee for create-only Root writes is scoped to backends with atomic no-replace publication (`require`, or `auto` with a loaded binding); the JavaScript fallback's behavior is documented and regression-pinned.
+
+### Secret files and permissions
+
+- Preserve existing secret-directory permissions instead of repairing them; retain lossless directory identities through private locks and native writes, initialize new directories through guarded descriptor authority, honor full directory mode bits, and fail closed for unpinnable parents, including non-root macOS directories created under `umask(0o777)`.
+- Finalize explicit file modes after content writes across pinned writers, verify all `0o7777` POSIX bits for secret publication, and use exact identities before native Windows mode changes and failed-write cleanup; JavaScript fallback cleanup preserves unverified replacements.
+- Complete short synchronous regular-file appends and preserve explicitly requested special mode bits in both append helpers, retaining permission tightening before any data is written.
+- Verify atomic secret writes through the writer's retained descriptor so restrictive POSIX modes such as `0o000` and `0o200` succeed without a readonly reopen or widened permissions.
+- Retry and fully revalidate raced secret-parent creation so concurrent writes to distinct leaves succeed without leaking `EEXIST` or reporting a false `secret-exists` collision.
+- Scope the sibling-temp no-visibility guarantee for create-only Root writes (`create`, `createJson`, `write({ overwrite: false })`) to backends with atomic no-replace publication: the native binding stages privately and renames without clobbering, while the pure-JavaScript fallback claims the final name exclusively before content is written. Regression tests now pin both behaviors.
+- Normalize every exclusive-copy target to mode `0o600` through its owned descriptor, including under restrictive umasks and native macOS clone staging.
+
+### Locks and durable queues
+
+- Retry Windows Root-backed sidecar exclusive-create denials within the existing eight-retry and caller budgets, using per-call provenance while preserving callback errors and rejecting replayed failure evidence.
+- Release asynchronously acquired Root-backed sidecar locks on natural event-loop shutdown through their retained ownership receipts, preserving changed sidecars and avoiding cleanup retry loops.
+- Keep async Root-backed lock normalization read-only, rejecting deleted or replaced admitted parents without recreating them while preserving explicit in-root sidecars for external target keys.
+- Reject serialized sidecar lock payloads above 1 MiB of UTF-8 bytes, including ownership overhead, with `too-large` before async or sync acquisition so admitted locks remain verifiable and releasable.
+- Honor explicit async file-lock retry counts independently of infinite deadlines, matching sync locks while preserving unlimited retries when the count is omitted.
+- Propagate durable queue enqueue parent-sync failures and keep published-file identity checks after synchronization, sharing the guarded writer with migrations while retaining retry state.
+- Propagate durable queue batch claim and migration failures instead of returning empty or partial success, and strictly sync migration publication in both loaders while preserving retry state.
+- Resync durable queue acknowledgement retries after final marker unlink before reporting completion or a newer-generation mismatch.
+
+### Paths, stores, and moves
+
+- Enforce portable FileStore keys consistently across methods: async reads, `exists`, and `remove` now reject parent-segment and backslash aliases with `invalid-path` for existing roots, matching sync and write methods while preserving missing-root error precedence and Root's confined existing-object compatibility.
+- Prevent no-reader FIFOs from stalling POSIX `Root.openWritable()` and async/sync regular-file append admission, preserving regular-file write semantics and existing-target cleanup fencing.
+- Accept canonical in-root absolute paths in `Root.readAbsolute()` and `Root.reader()` when the Root was configured through a directory symlink or Windows junction.
+- Reject dangling symlink leaves and ancestors under strict absolute-write and missing local-root resolution instead of treating unresolved aliases as safe missing paths.
+- Move dangling symlink sources through staged and cross-device fallback without dereferencing their absent referents, while retaining same-entry, descendant, and source-substitution guards.
+- Retire every copied source name after cross-device moves with allowed in-tree hardlink aliases, while preserving `ESTALE` fences for unverified external mutations.
+- End `Root.walk()` immediately after its single truncation marker, including when a nested depth or entry budget is reached.
+- Bound callback staging components to 255 NFC/NFD bytes so filesystem-valid long destination names work without changing final names or short callback paths.
+
+### Archives
+
+- Separate archive staging permissions from final publication modes so zero/write-only files and restrictive directories extract correctly; finalize explicit and implicit directory modes through retained, verified authority and reject unsafe mode application instead of silently skipping it.
+- Preserve pre-existing and substituted destination files when an archive merge fails, leaving guarded copy cleanup to the operation that owns publication.
+- Decode absent TAR modes and supported signed GNU binary permission bits in native manifests, matching JavaScript defaults without changing the native ABI.
+- Close a selected archive input if private staging allocation fails, preventing `readArchiveEntry()` setup errors from retaining file descriptors until garbage collection.
+- Avoid opening the TAR metadata stream until preflight setup succeeds, and always destroy it after pipeline completion, preventing descriptor leaks on setup failures. Thanks @SebTardif.
+
+### Docs, packaging, and validation
+
+- Add the narrow `@openclaw/fs-safe/secure-temp-root` package subpath so consumers can import `resolveSecureTempRoot()` and its options type without loading the temp workspace implementation.
+- Exercise secret-directory admission from isolated npm/pnpm consumer installs, retain real-identity and native-load proof, and honor explicit package-proof output paths.
+- Correct lower-level archive helper signatures in the reference docs and guard them against drifting from the public declarations.
+- Keep slow physical-package fixture setup outside the process-exit test deadline, drain fixture work before teardown, and give each adversarial corpus payload its own test lifetime while retaining Windows boundary assertions.
+- Bound workflow-dispatch test subprocesses and terminate their process groups before fixture cleanup, so stuck shell descendants fail validation instead of hanging the suite.
+- Assign cross-platform sidecar contention proof liveness to its whole-worker watchdog instead of false-failing healthy unfair acquisition; production lock timeout behavior is unchanged.
+- Refresh the Node type definitions, align development and CI on pnpm 11.25.0, and update the pinned Pages deployment action to v5.0.1 for polling backoff and jitter. Thanks @dependabot.
+
+## 0.7.2 - 2026-09-01
+
+- Add `movePathWithCopyFallback({ assertBeforeRename })` to synchronously recheck caller-owned authorization immediately before direct or staged rename, preserving refusal errors and rejecting asynchronous callbacks without publishing the move.
+
+## 0.7.1 - 2026-09-01
+
+### Highlights
+
+- **Make lock handoffs reliable:** recover from disappearing ownership records within retry budgets, preserve callback errors, and safely retry failed synchronous release cleanup.
+- **Reject corrupt native ZIP reads:** verify decoded entry length against the declared size before returning bytes, while retaining byte caps and CRC checks.
+- **Preserve long destination filenames:** use independent private staging names for Root writes and copies, ZIP extraction, and synchronous JSON writes instead of lengthening the destination basename.
+
+### File locks
+
+- Recover Root-backed asynchronous handoffs from unlinked opened records with exact descriptor identity and unlink evidence, including Windows resolver `EPERM`/`EBADF` failures. Recheck canonical ancestors and charge discarded observations to retry/deadline budgets without granting release or reclaim authority. ([#189](https://github.com/openclaw/fs-safe/pull/189))
+- Retry Root lock contention when a holder changes between pre-open inspection and opening the file. Discard only the verified stale observation, recheck canonical ancestors, and require fresh exclusive creation; generic reads, creator admission, and release/reclaim authority remain unchanged.
+- Verify reopened Root-created sidecars against the creator's exact serialized bytes and ownership token before admission. Reject replacements and unlinked descriptors, and retain the original creator receipt for failed-acquisition cleanup. ([#189](https://github.com/openclaw/fs-safe/pull/189))
+- Align Windows synchronous lock-parent canonicalization with Root, including short-name expansion, and bound lock-file create/open denials and missing or changed snapshot retries. Preserve the original `EPERM` when a retry budget is exhausted. ([#189](https://github.com/openclaw/fs-safe/pull/189))
+- Determine synchronous lock staleness from the captured payload timestamp or snapshot mtime, avoiding false stale decisions after unlink or replacement. ([#189](https://github.com/openclaw/fs-safe/pull/189))
+- Retain failed synchronous release cleanup for safe retries without double-decrementing references, re-closing a consumed or reused descriptor, or deleting a replacement sidecar. ([#189](https://github.com/openclaw/fs-safe/pull/189))
+- Propagate payload, JSON serialization, and parsing failures unchanged without retrying the failing callback. Scope Root failure evidence to each observation so historical errors cannot trigger retries in later, nested, or concurrent acquisitions. ([#190](https://github.com/openclaw/fs-safe/pull/190))
+
+### File writes and archives
+
+- Keep private staging names independent of destination basenames across guarded Root writes and copies, native Windows writes, ZIP extraction, and `writeJsonSync()`. Preserve public producer filenames, custom `tempPrefix`, and literal JSON parent-path and drive-relative semantics. ([#191](https://github.com/openclaw/fs-safe/pull/191))
+- Avoid opening an existing target merely to inherit its mode during create-only Root writes, while preserving boundary, alias, hardlink, and type checks. ([#189](https://github.com/openclaw/fs-safe/pull/189))
+- Reject native `readArchiveEntry()` ZIP payloads whose decoded length differs from the declared uncompressed size with `ArchiveFormatError("archive-header-invalid")`, matching JavaScript behavior while preserving `maxBytes` and CRC checks. ([#189](https://github.com/openclaw/fs-safe/pull/189))
+
+### Docs and validation
+
+- Clarify that invalid UTF-8 or nonzero bytes after NUL terminators in fixed TAR name, linkname, and USTAR prefix fields reject with `ArchiveSecurityError("entry-path")`; this documents existing behavior. ([#189](https://github.com/openclaw/fs-safe/pull/189))
+- Add cross-process contention and release-retry proofs, plus focused lock-admission and ZIP-integrity coverage in JavaScript-fallback and required-native CI paths. Refresh the release checklist for eight-package trusted publishing.
+
+## 0.7.0 - 2026-08-31
+
+### Highlights
+
+- **Safer reads and writes:** extend exact identity checks and retained-descriptor publication to reject substituted inputs and detect publication mismatches, including rounded-equal Windows file IDs.
+- **Opt into bounded temp cleanup:** `cleanupSafety: "require-bounded"` prevents recursive traversal of substituted workspace trees, while the compatible default remains available without native support. See the [cleanup guarantees and POSIX limits](https://fs-safe.io/temp.html#private-temp-workspaces).
+- **Harden untrusted archive handling:** reject hidden path aliases, ambiguous TAR metadata, corrupt gzip streams, and excessive decoded data before publication; align filtering and entry reads across JavaScript and native backends.
+- **Preserve queued work and durability:** generation-bound claims protect newer same-ID entries from acknowledgement or quarantine, and queue transitions and synchronous store writes sync their filesystem changes.
+- **Make lock handoffs and timeouts reliable:** recover from ownership records unlinked during contention, surface release failures, and finish in-flight archive publication or rollback before returning a timeout.
+
+### Compatibility and upgrade notes
+
+- **Claim queued entries before processing.** Call `loadJsonDurableQueueEntry()` or the batch loader before acknowledgement, rather than pairing a direct read with `ackJsonDurableQueueEntry()`. A pending entry without a processing claim now rejects; missing entries remain idempotent no-ops. Queue and failed directories must share a filesystem with hardlink support for quarantine. See the [queue recovery contract](https://fs-safe.io/store.html).
+- **Handle the new cleanup result.** `TempWorkspaceCleanupResult` adds `"indeterminate"` for cleanup whose safe completion cannot be established. Exhaustive result handlers must accept it; do not treat it as successful removal or blindly delete retained artifacts.
+- **Archive filters receive canonical pre-strip paths.** `entryFilter` now sees normalized separators, dot components, and effective metadata names rather than alternate spellings of the same entry. Update filters that match raw aliases; invalid `onFiltered` values reject before extraction rather than enabling skipping.
+- **Validate limits and handle surfaced errors.** Root, FileStore, secure/secret/regular reads, durable queues, and external output require `maxBytes` to be a non-negative safe integer or positive `Infinity`; zero is enforced and `undefined` retains configured defaults. Lock retry/deadline numbers are validated. Handle propagated release, failed-acquire cleanup, and durability failures; exhaustive archive-limit handlers must accept `archive-decoded-size-exceeds-limit`.
+
+### File safety and temp cleanup
+
+- Verify regular-file reads, root-file adapters, archive staging, `Root.copyIn()` sources, and durable JSON queue reads with lossless bigint identities. Reject replacements whose IDs round to the same JavaScript number and unresolved Windows identities before reading bytes; public numeric `Stats` receipts remain unchanged.
+- Verify async and sync regular-file append targets against exact pre-open, descriptor, and current-path identities, rejecting rounded-equal replacements and persistent unknown Windows identities before chmod or append.
+- Retain async and sync atomic replacement descriptors across `beforeRename`, retries, copy fallback, and publication. Reject substituted, non-regular, or hardlinked stages and preserve unowned cleanup paths. `replaceFileAtomic()` and its sync variant add `renameIdentity: "verify-content-with-lock"` for rename-unstable FUSE mounts: an explicit weaker identity contract for cooperating writers, not protection against same-authority actors ignoring the lock.
+- Pin callback-produced sibling temps through mode application, optional fsync, rename, and publication checks. Preserve unverified paths and producer modes, retain disabled sync defaults and best-effort file/directory chmod, and admit read-only descriptors unless `writeSiblingTempFile` requests file sync.
+- Apply `writeJsonSync()` best-effort file-mode tightening only through a reopened, single-link regular descriptor matching the staged bigint identity, so a swap cannot chmod an unrelated file.
+- Add native handle-relative temp workspace removal with collision-safe quarantine, enumerated-child identity checks, mount-crossing rejection, and symlink/reparse leaf removal without target traversal. Windows deletes exact opened handles; POSIX retains a documented final name-based race bounded to one substituted leaf or empty directory entry, never recursive traversal of a substituted nonempty tree.
+- Require usable Linux `openat2` with `RESOLVE_NO_XDEV` at runtime for bounded cleanup. Compatible mode falls back when unavailable; `cleanupSafety: "require-bounded"` rejects before creating a child.
+- Open attacker-raceable secure, secret, archive, queue, publication, fallback, and lock-file read paths nonblocking on POSIX, so a FIFO substitution cannot stall admission, deadlines, or cleanup verification.
+
+### Archive extraction and reads
+
+- Prevent archive path aliases from bypassing excluded subtrees: pass canonical pre-strip paths to `entryFilter` across JavaScript/native ZIP, TAR, gzip, zstd, and bzip2, while retaining raw-path validation, stripping, collision checks, and filter rejection policy.
+- Reject ambiguous TAR EOF framing, unsafe numeric sizes, and bodies on raw directory/link entries before parsing. Enforce an absolute decoded-byte ceiling through physical EOF, including metadata and zero padding, before extraction publication or entry-read success; report `archive-decoded-size-exceeds-limit` on overflow.
+- Bound retained TAR manifests with a shared budget capped at 64 MiB, independent of compressed input size. Validate checksums, strict fixed-field UTF-8, NFC/NFD component lengths, GNU effective trailing separators, and linkname/type consistency before metadata processing or caller policy.
+- Validate GNU long-name/link bodies on both backends before parsing: reject malformed UTF-8/NUL structure, repeated or dangling metadata, mixed PAX/GNU chains, and unsafe effective names, while preserving original bytes and valid L+K pairs.
+- Apply ordered path, count, strip, depth, collision, and filter policy even to TAR records parsers would ignore (`V`, `A`, `I`, `M`, and unknown typeflags). Safely omit accepted unsupported records, validate raw names hidden by metadata or NUL terminators, and align native device/FIFO filtering and GNUDumpDir handling with JavaScript.
+- Stop starting archive destination mutations at the timeout boundary and wait for any already-running destination mutation and rollback before rejecting. Non-mutating work retains prompt deadlines; publication cannot continue after the timeout is reported.
+- Match `readArchiveEntry()` to extraction's validated canonical pre-strip paths and effective metadata names across all supported formats/backends. Preserve directory, link, collision, integrity, and byte-limit checks; read `maxBytes` remains a requested-entry budget, separate from archive-wide decoding and metadata limits.
+- Charge TAR `maxEntryBytes` and `maxExtractedBytes` only to entries accepted after strip/filter policy, not skipped or fully stripped members. Raw framing, logical entry counts, metadata, and absolute decoded-byte limits still apply to the whole archive.
+- Accept highly compressible gzip TARs within fs-safe's explicit limits consistently across backends by disabling node-tar's extra 1000x ratio threshold only after complete decoded-byte admission. Archive, decoded, entry, output, and deadline limits remain enforced.
+- Preserve large finite TAR limits such as `Number.MAX_VALUE` in native `auto`/`require` modes through shared internal metadata/decoded-byte and u32 entry-count clamping before backend selection; retain high-level payload budgets and reject malformed direct native limits.
+- Update native gzip/DEFLATE decoding to flate2 1.1.10 and miniz_oxide 0.9.1, including upstream incomplete-stream fixes. Truncated bodies, missing trailers, and checksum failures reject before extraction publishes files or an entry read returns bytes.
+
+### Durable queues, stores, and locks
+
+- Claim durable queue generations under a fail-closed cross-process lock using no-replace hardlinks and recoverable source retirement. Acknowledgement and quarantine preserve newer same-ID replacements, and quarantine collisions preserve existing failed-entry evidence.
+- Fsync affected directories for queue creation, claims, acknowledgement, quarantine, marker cleanup, and retirement; propagate durability failures. Synchronous file-store writes now fsync temps before rename and parent directories after publication.
+- Retry Root-backed sidecar acquisition when the owner unlinks its record after the waiter opens it, but only after the same Root capability proves absence. Replacements remain fail-closed; generic `Root.open()` behavior is unchanged.
+- Propagate asynchronous sidecar release and failed-acquire deletion failures, preserve paired errors, and retain failed release state for a safe retry through the same handle or manager drain.
+- Clamp synchronous lock backoff to the remaining finite deadline instead of overshooting the timeout or blocking forever.
+
+## 0.6.0 - 2026-08-29
+
+### Highlights
+
+- Install only the matching native platform package; deployments using native mode `require` or native-only features must keep optional dependencies enabled. See the [0.6 migration guide](https://fs-safe.io/migrating-to-0.6.html).
+- Strengthen root, secure, secret, and pathname-hash identity checks with lossless bigint comparisons and fail-closed handling of unknown Windows identities.
+- Add native-required Linux/macOS `stageFileInDirectory()` with retained-directory cleanup, private staging, identity-checked publication, and async disposal.
+- Validate physical ZIP metadata and names before decoder normalization or collapse, align bounded TAR/PAX and stripped-path handling, and reject ZIP symlinks disguised as directories.
+
+### Security and Correctness
+
+- Validate physical ZIP local/central and Unicode name metadata before decoding, rejecting traversal, hidden duplicates, and conflicting interpretations consistently in extraction and bounded reads.
+
+- Verify pathname SHA-256 hashing with lossless pre-open, descriptor, and current-path identities; fail closed on unknown Windows identities after one bounded retry without reopening the file.
+- Preserve underlying command diagnostics (command, timing, timeout flag, exit code/signal, and sanitized stderr) and cause on Windows ACL `permission-unverified` errors without changing verification semantics.
+- Verify secure and secret read identities with lossless bigint stats, reject replaced paths and retargeted aliases, and fail closed on unknown Windows identities after one bounded re-inspection; preserve the secure reader's numeric `Stats` receipt and permission options without letting them bypass identity checks.
+- Apply the same exact identity checks to guarded root reads, rejecting parent-directory replacements even when distinct Windows file IDs round to the same number; retain numeric read receipts and keep Windows write reopens anchored to the writer's exact retained identity.
+- Verify `Root.write()` and `create()` through retained descriptors and exact bigint identities for restrictive final modes, retaining guarded Windows path opens when pathname identity is unavailable; preserve explicit mode zero in `copyIn()`.
+- Preserve filesystem failures from `ensureDirectoryWithinRoot()` and `pathScope().ensureDir()` in an optional operational `FsSafeError` diagnostic with the original cause and bounded, escaped display text, instead of misreporting them as containment violations; keep nonthrowing string results and directory safety checks.
+- Accept bounded local PAX paths, sizes, and descriptive metadata, including inert binary macOS provenance xattrs, consistently in JavaScript and native TAR extraction/reads; reject ambiguous records, extension chains, and sparse semantics while retaining byte/count limits and guarded staging. Return TAR read traversal failures through the public promise instead of escaping the parser callback.
+- Add native-required Linux/macOS `stageFileInDirectory()` under `advanced` with retained-directory abort cleanup, private `0600` staging until publication is identity-checked, exact identity checks, explicit publication/cleanup receipts, and async disposal; share that ownership with POSIX native streaming writes so parent moves no longer strand their unpublished temps.
+- Share native writer admission and direct-child cleanup mechanisms; preserve combined POSIX coordinator operation/disposal failures with `SuppressedError` while keeping staged preparation/cleanup receipts and Windows close policy unchanged.
+- Fail closed when synchronous sidecar compromise checks hit I/O errors and invoke `onCompromised` once instead of throwing from the interval. Thanks @SebTardif.
+- Reject ZIP symlink-mode entries with a trailing slash or DOS directory bit before creating output, aligning JavaScript extraction with native link policy while preserving explicit filtering. Thanks @Yigtwxx.
+- Make the validated stripped path authoritative during JavaScript TAR extraction, fixing `ENOENT` and native path disagreement for dot or empty components, including local PAX paths, while preserving pre-strip filter inputs. Thanks @Yigtwxx.
+- Apply process-wide retry, timeout, and stale-policy defaults to synchronous file locks while preserving per-call overrides and caller-approved guarded recovery. Thanks @Yigtwxx.
+
+### Docs and Tooling
+
+- Publish native bindings as platform-filtered optional packages and load only the matching package, avoiding installation of binaries for six unrelated targets; verify root-only npm/pnpm resolution and document omitted-optionals limits and native-only recovery guidance. Thanks @RomneyDa.
+- Raise the Crabbox AWS root volume to 400 GiB to meet the runner image's snapshot minimum and avoid allocation failures before checks run.
+- Restore six missing documentation navigation entries, remove the dangling page, correct the lock-config link, and reject missing, nonexistent, or duplicate registrations before replacing site output. Thanks @Yigtwxx.
+- Fix the standalone native smoke script to use the numeric descriptor returned by `openBeneath()` for identity checks and cleanup.
+- Accept npm 11 array and npm 12 package-name-keyed pack results while validating the intended package and its file metadata.
+
+### Dependencies and maintenance
+
+- Refresh the Node and Rust dependency graphs, align development and CI on pnpm 11.24.0, and update the CodeQL, npm, and cargo-zigbuild pins while preserving the two-day dependency cooldown.
+
+## 0.5.6 - 2026-08-14
+
+### Security and Correctness
+
+- Treat asynchronous sidecar compromise-check I/O failures as a lost lock and invoke `onCompromised` once, instead of leaking an unhandled rejection from the interval.
+- Preserve replaced temporary paths during Windows cleanup when libuv reports a zero device or inode or a file index exceeds JavaScript's safe integer range, treating unknown or rounded identity as fail-closed instead of authorizing deletion.
+
+### Docs and Tooling
+
+- Set up Node before pnpm when hydrating Crabbox runners so minimal images without a preinstalled npm can prepare the workspace.
+## 0.5.5 - 2026-08-12
+
+### Security and Correctness
+
+- Prevent nondeterministic Windows read failures with `path-mismatch` when path-based stat reports zero file identity through libuv's FindFirstFile fallback under antivirus or indexer contention; zero Windows inodes are now treated as unknown identity like zero device serials.
+
+## 0.5.4 - 2026-08-10
+
+**Highlight:** two security fixes in the publication path. If you run fs-safe on
+Windows, the identity fix is the one that matters — rounded file indexes could
+previously let a replaced path pass as the original.
+
+### Security and Correctness
+
+- Compare exact bigint filesystem identities during exclusive publication and rollback cleanup. Windows rounds file indexes, so a replaced source or target path could previously masquerade as the original — and, worse, authorize deletion of an attacker's replacement. Identity comparisons are now exact.
+- Open pinned and standalone regular-file reads nonblocking on POSIX before validating the descriptor type, so a raced FIFO or device cannot stall the worker. The same read-open flags are now shared by root reads, hashing, and move-copy fallbacks, so the guarantee holds on every path rather than just the one that was fixed.
+
+### Dependencies and maintenance
+
+- Refresh the napi toolchain (napi 3.12.1, napi-derive 3.6.3, napi-build 2.4.1) and the Rust and Node development dependency graph.
+
+## 0.5.3 - 2026-08-08
+
+### Security and Correctness
+
+- Reject NTFS alternate data stream archive entry names on Windows before extraction, keep JavaScript and native TAR/ZIP policy aligned, and fix one-code-unit native rename and hardlink metadata buffers.
+- Reject synchronous secret reads when the path is retargeted after the preview check, matching the asynchronous reader's `path-mismatch` contract instead of returning bytes from the replacement file.
+- Preserve dangling symlinks when trash moves cross filesystems instead of failing while following their missing targets.
+- Reject non-canonical FileStore keys and malformed archive names before filesystem access, keep JavaScript/native TAR and ZIP rejection semantics aligned (including full-width base-256 sizes and empty ZIP files), and add deterministic property-based regression coverage for path aliasing, parser boundaries, collisions, truncation, and extraction limits.
+
+### Compatibility
+
+- Report filesystem I/O failures from secret, `FileStore`, and temp-workspace twin readers as the new operational `read-failed` code with the original error in `cause`, replacing synchronous secret `invalid-path`, asynchronous secret and synchronous store `path-mismatch`, and raw Node errors; consumers matching the old wrapper or `EIO`-style top-level code should match `read-failed` and inspect `cause.code` instead.
+- Preserve semantic path and validation codes in synchronous `FileStore` and temp-workspace reads: missing temp leaves now report `not-found`, stable directories report `not-file`, and hardlinks and symlinks report `hardlink` and `symlink`, replacing `path-mismatch` and fabricated raw `ENOENT` respectively to match their asynchronous twins; consumers treating either old result as absence or identity drift should match the specific path-state code instead.
+- Report an existing non-directory ancestor as `not-file` from both `assertNoSymlinkParents()` variants, replacing asynchronous success and the synchronous helper's platform-dependent success or raw `ENOTDIR` under default `allowMissing`; callers relying on that acceptance should ensure every existing prefix component is a directory or handle `not-file`.
+
+### Docs and Tooling
+
+- Measure coverage once per operating system and merge the platform reports before enforcing thresholds, so coverage reflects existing cross-platform execution rather than implying new test coverage.
+- Refresh Vite and its Rolldown toolchain, and declare the native build CLI's Emscripten runtime peer explicitly.
+
+## 0.5.2 - 2026-08-02
+
+### Security and Correctness
+
+- Reject negative, malformed, and oversized base-256 TAR sizes using the full encoded field, preventing high-order size bytes from bypassing archive metadata metering.
+- Preserve unrelated files when the create-only JavaScript `Root.write()` fallback loses a parent-directory race during post-write verification, limiting failure cleanup to the inode created by the operation.
+- Report the documented `not-file` code when a writable Root open reaches a non-regular descriptor on Windows, matching the existing POSIX `EISDIR` mapping.
+- Serialize same-target `Root.write()` and `Root.copyIn()` calls before inspecting the existing destination, so ordinary overlapping writers do not race the mode-preservation open against another writer's atomic replacement.
+- Serialize same-target directory replacements, confine their randomized backup names to the target parent, retain identity-bound exit cleanup after transient atomic/output/move staging cleanup failures, and refuse to publish EXDEV move copies when descriptor-bound mode application fails.
+- Stream native pinned-write inputs only after create-only collision checks, avoiding backend-dependent eager buffering, and preserve explicit zero file modes instead of replacing them with `0o600`.
+- Verify synchronous file-store publication by inode after rename and avoid pathname-based post-publication mode changes, so a raced symlink or hardlink swap fails closed without changing an unrelated target's permissions.
+- Track live JSON-store mutation ownership separately from inherited async context, so continuations scheduled by an update can mutate the store after that update finishes while genuinely nested mutations remain rejected.
+- Serialize private secret and file-store publications by canonical destination, preventing ordinary overlapping writers from tripping the fallback's post-rename identity fence while retaining atomic last-writer-wins replacement.
+- Preserve replacement sidecars when asynchronous lock setup fails, remove an identity-matching `Root`-backed sidecar when its post-create open fails, and clean up synchronous sidecars on normal process exit.
+- Pin each `Root` handle to the canonical root directory identity so root-path replacement cannot expose outside metadata through `stat()`, `exists()`, `list()`, or `walk()`, and preserve a swapped-in writable leaf when failed-open cleanup no longer owns its inode.
+- Fail closed on invalid walk and absolute-path policies, keep standalone walk budgets bounded at runtime, reject final symlinks from absolute writable paths, and observe aborts that arrive during directory listing.
+- Canonicalize configured local-root symlinks, recognize case-insensitive `file:` URL schemes (including unsafe device targets) using the requested platform's path semantics, validate every configured root, confine secure-temp fallback prefixes to one segment, preserve replaced temp-file directories during cleanup, return absolute install paths, and avoid splitting Unicode surrogate pairs while truncating filenames.
+- Reject archive output names that collide after case or Unicode normalization, keeping extraction deterministic across JavaScript/native backends and case-insensitive filesystems.
+- Escape control characters in archive-entry and root-path diagnostics, and reject NUL inputs plus embedded Windows drive-relative segments in the direct sync and async root resolvers before Node can echo raw attacker-controlled paths from a syscall error or resolve the two variants differently.
+- Shell-quote POSIX permission-remediation paths, and report a secret file that grows past the synchronous read limit as `too-large` just like the asynchronous reader.
+- Fence pathname SHA-256 hashing against pre-open identity replacement, propagate bounded-stream source failures while tearing down file streams on early consumer close, and report synchronous regular-file disappearance races as `path-mismatch` consistently with the async reader.
+- Pin synchronous file-store roots across every parent-walk segment, so private and non-private writes reject a store root replaced during directory creation, and route deny-mutation ancestor canonicalization through the shared root resolver on Windows and POSIX.
+- Keep the POSIX parent-directory no-follow identity check active for synchronous atomic-replacement adapters that omit `fchmodSync`, preventing the documented default adapter path from writing through a symlinked parent.
+- Synchronize the actual destination after descriptor-bound mode application when atomic rename uses copy fallback, and include both bytes and mode in bounded fallback restoration.
+- Continue accepting legacy atomic-replacement adapter literals that expose pathname `chmod` or `chmodSync` methods while keeping those methods unused.
+- Reject archive NUL names, drive-relative path segments, duplicate output names (including collisions introduced by `stripComponents`), and ZIP CRC or declared-size mismatches before publishing output. Explicit zero archive limits now remain zero, and stripped TAR entries count toward `maxEntries`, keeping the native and JavaScript policies aligned.
+
+- Reject non-file sidecars without spinning, and read contended async and synchronous sidecar locks through bounded, no-follow, identity-checked descriptors; keep valid `createdAt` timestamps authoritative under filesystem clock skew; fail closed when fallback Windows ACL inspection returns no verifiable access entries; preserve synchronous stale-reclaim guards owned by another acquirer; and share one process-exit cleanup listener across file-lock manager domains.
+
+- Route `Root.copyIn()` and overwrite-capable `Root.write()` commits through a new descriptor-relative native replace rename, closing a parent-symlink swap that could create a missing destination directory outside the root before the JavaScript fallback detected the escape. Native `auto` and `require` mode now protect both create-only and replacing pinned writes; the explicitly best-effort JavaScript fallback remains available in `off` mode or when `auto` cannot load a binding.
+- Report `not-found` rather than `invalid-path` or raw `ENOENT` when pinned `Root.write()` and `Root.copyIn()` calls cannot find their parent with `mkdir: false`, preserving the documented operational error category.
+- Reject stable intermediate symlinks in default `Root` reads and the sync/async root-file helpers, while preserving `device-path` precedence for lexically explicit unsafe namespaces such as `/dev/fd`; compare the pre-open path identity with the opened descriptor so an in-root parent swap reports `path-mismatch`, open reads nonblocking where supported so a raced FIFO cannot pin a worker, and report followed symlink loops with the documented `symlink` code.
+- Reject surrounding whitespace in every async and sync `FileStore` key instead of silently trimming one caller-supplied key onto another.
+- Keep Windows-ignored trailing spaces and dots from disguising reserved device basenames such as `CON .` in `sanitizeUntrustedFileName()` output.
+- Report overlong `Root` inputs as `invalid-path` instead of misclassifying the filesystem's `ENAMETOOLONG` failure as `outside-workspace`.
+
+- Apply `movePathWithCopyFallback()` file and POSIX directory modes through staging descriptors before publication, so a replaceable staging pathname cannot redirect `chmod` to an unrelated symlink target. Windows no longer uses a pathname fallback for directory modes because Node cannot portably open a directory descriptor there and does not enforce POSIX modes.
+
+- Reject drive-relative segments such as `C:secret.txt` and `a/C:b` in portable relative-path parsing and every `FileStore` key, and reject leading drive-relative spellings on `Root` destinations and `resolve()` with `invalid-path`. Existing-object Root operations, including reads, inspection, removal, and the source of `move()`, continue to accept legal POSIX filenames such as `c:notes.txt`; thanks @Yigtwxx for the fix.
+
+- Apply atomic-replacement parent-directory modes through verified no-follow descriptors on POSIX, so a directory-entry swap cannot redirect `chmod` through a symlink to an unrelated directory. Windows keeps its explicit `mkdir(mode)`-only behavior because Node does not enforce POSIX directory modes there.
+- Retry a contended file-lock acquisition when Windows denies access to a lock file whose directory entry is still being torn down, including when the native binding performs the exclusive create. Both the exclusive create and the holder's snapshot read reported that transient `EPERM` as a hard failure, so concurrent `acquireFileLock()` calls failed intermittently on Windows even though the very next attempt would have succeeded. Retries stay bounded, so a genuine permission denial still surfaces as `EPERM` rather than a lock timeout; thanks @Yigtwxx for the fix.
+- Apply `replaceFileAtomic()` and `replaceFileAtomicSync()` modes through pinned temp-file descriptors before rename, and through pinned copy-fallback descriptors, so a post-rename symlink swap cannot redirect `chmod` to an unrelated file while exact modes remain independent of umask; thanks @yetval for reporting this (#86).
+- Bound fallback Windows owner and ACL command execution to 30 seconds per process, tolerating loaded runners while still terminating wedged commands, and report owner-query failures as unverified instead of returning a partial permission classification; thanks @Yigtwxx for the diagnosis.
+- Verify published npm bytes directly when registry integrity metadata conflicts, and cryptographically verify the registry signature plus Sigstore provenance against the package digest and the trusted fs-safe release workflow (#81).
+- Report the documented `remove()` failure codes instead of collapsing every failure to `path-alias`. A missing target now throws `not-found`, a non-empty directory throws `not-empty`, and any other filesystem failure throws `not-removable`, while directory identity drift keeps reporting `path-mismatch`; thanks @Yigtwxx for the fix.
+
+### Compatibility
+
+- Report access-denied failures from native Windows operations as `EPERM` rather than `EACCES`, matching Node/libuv and the JavaScript fallback. Consumers that matched the previous native-only `EACCES` code should accept `EPERM` as well when supporting older package versions.
+- Add an optional `fchmodSync` operation to the injectable synchronous atomic-replacement filesystem type. Async adapters need no new member because their required `open()` returns a mode-capable `FileHandle`; custom sync adapters that pass `mode`, `dirMode`, or `preserveExistingMode` now fail before mutation when `fchmodSync` is absent, while plain `node:fs` injection and adapters that request none of those options remain compatible.
+- Classify `not-found`, `not-empty` and `not-removable` as operational rather than policy errors, so `FsSafeError.category` no longer reports routine filesystem outcomes as safety-policy rejections.
+
+### Features
+
+- Suffix Windows reserved basenames with `_` in `sanitizeUntrustedFileName()` while preserving case and extensions on every platform, including dollar names and superscript COM/LPT variants; thanks @SebTardif (#67).
+
+### Docs and Tooling
+
+- Refresh the native package build CLI to `@napi-rs/cli` 3.8.2.
+- Give parallel native archive tests collision-free temporary paths so one fixture cannot remove another test's file on coarse-resolution clocks.
+- Include the README banner in the npm tarball and require it during pack checks so the published README does not reference a missing package asset; sanitize pnpm-only npm configuration from package-smoke subprocesses so the documented release check stays warning-free on newer npm versions.
+- Audit every public export and documented default against generated declarations and real filesystem behavior, add executable documentation-contract coverage, and correct stale examples and security guarantees across root writes, local roots, shared types, paths, temp roots, archives, errors, and filename portability.
+
+- Create GitHub Releases as drafts before npm publication, then attach immutable verification proof and promote them only after the published package passes the shared registry verifier, avoiding stranded releases during registry propagation incidents (#81).
+
+## 0.5.1 - 2026-08-01
+
+### Security and Correctness
+
+- Stop trimming surrounding whitespace when normalizing Windows paths for comparison, so a space-padded root no longer compares equal to its unpadded sibling and `isPathInside` keeps reporting outside paths as outside.
+- Apply `denyMutations` prefixes to the directory they name on Windows. A prefix with trailing whitespace previously compared equal to its unpadded sibling, so the named directory stayed writable while the sibling was blocked; the two `preserves trailing whitespace` deny-mutation cases now run on Windows instead of being skipped.
+- Replace backtracking-prone path-segment, temp-name, and Windows device-path sanitizers with linear scans to keep attacker-controlled inputs from causing excessive CPU use.
+
+### Docs and Tooling
+
+- Refresh the npm and Rust build toolchains, including the `zip` 8.6 native archive reader and the latest pinned CodeQL v4 action.
+- Publish only the validated release tarball after asserting its byte identity against the release manifest, and tolerate npm registry propagation with bounded exponential backoff.
+
+## 0.5.0 - 2026-07-27
+
+### Highlights
+
+- Add policy-driven archive entry filtering and mode handling, bounded single-entry archive reads, root-bounded async walking, synchronous sidecar locks, async secret reads, create-only secret writes, and exclusive file publication.
+- Add public streaming `sha256File(path | FileHandle)` hashing with optional async native acceleration, plus policy-free Windows owner/DACL facts with owner and current-process-user SIDs and per-ACE masks and inheritance flags.
+- Add native fd-relative ZIP and TAR extraction/read support with gzip, zstd, and bzip2 streaming; TypeScript evaluates the shared entry policy before Rust creates any output, and zstd/bzip2 report a typed native-required error when no binding is available.
+- Bound PAX, GNU long-name/link, and sparse metadata with one `maxMetaEntryBytes` policy shared by node-tar and the native fixed-header metering reader, including typed failures for oversized or malformed metadata.
+- Add `Root.walk()` subtree pruning and partial directory-error reporting for bounded best-effort consumers, plus a shared `maxEntryPathComponents` archive limit that rejects implicit-directory depth attacks before either extraction path creates output.
+- Bundle all seven prebuilt native binaries inside the single `@openclaw/fs-safe` package for fd-relative opens, guarded directory creation and hardlinks, atomic no-replace rename, and file identity checks. This deliberately increases the package size in exchange for deterministic installs with no optional platform packages, downloads, postinstall step, or consumer Rust build; unsupported platforms silently use the guarded JavaScript fallback in `auto` mode.
+
+### Security and Correctness
+
+- **Security — `resolveRootPath()` / `resolveRootPathSync()`:** Published releases through 0.4.7 validated a lexically normalized path spelling, so a caller-supplied path traversing an in-root symlink could pass validation while resolving outside the root. Version 0.5 fixes this with component-wise alias resolution. `root()` handles were **not** affected: their operations have contained this case since `5ddca80`, so exposure is limited to direct users of these two exported helpers.
+- Prefer macOS 15.4's `O_RESOLVE_BENEATH` for native opens, retain the guarded component walk on older kernels, and apply an `F_GETPATH` post-open escape detector to both routes without claiming rename-race atomicity.
+- Report open containment explicitly: native `openBeneath()` returns `{ fd, containment }` with `kernel-atomic` on Linux and `best-effort` on macOS/Windows, while JavaScript root open/read/writable results report `best-effort`.
+- Serialize async `jsonStore` writes and read-modify-write updates in-process by canonical store path before taking the cross-process sidecar lock, preventing overlapping `write`, `update`, and `updateOr` calls from silently losing updates; reject nested same-path mutations with typed `store-reentrant-update` errors. Thanks @yetval for reporting this.
+- Create `append`, `openWritable`, and fallback `copyIn` parents through guarded per-component walks and continue I/O through the resolved in-root parent, preventing symlink-swap races from creating directories outside the root while preserving valid in-root symlink parents. Thanks @yetval for reporting this.
+- Add pinned-destination hardlink rejection and bounded original-content restoration to `replaceFileAtomic()` and its sync variant, including typed `restored` / `restore-failed` receipts for torn copy-fallback writes.
+- Add sibling staging to `writeExternalFileWithinRoot()`: external producers can write a randomized file in the target directory for fsynced same-filesystem atomic replacement, while private workspace staging remains the cross-device-tolerant default; staged and final basenames share portable C0/C1 and Windows-invalid-character sanitization on every host.
+- Enforce `movePathWithCopyFallback({ sourceHardlinks: "reject" })` with a streaming, entry-capped recursive preflight before mutation, closing a shipped 0.4.x gap where the common same-filesystem rename bypassed the policy; approved trees commit through a fresh staged copy with open-time and post-copy link-count fences so a scan/rename race cannot publish a hardlinked inode.
+- Abort and tear down JavaScript TAR extraction immediately when entry policy, path validation, link rejection, or a budget fails, preventing node-tar from leaving a paused parser after rejected fleet-restore entries; both native and JavaScript paths now return the same typed archive-policy errors.
+- Attach a post-creation failure receipt to `publishFileExclusive()` errors with the failing phase, whether this call created the target, its observed identity, and whether cleanup removed, preserved, or could not classify the target.
+- Add `publishFileExclusive({ onSyncFailure: "rollback" | "preserve" })`: rollback remains the default, while preserve keeps a complete target after directory-sync failure and reports the failed sync outcome in the typed provenance receipt.
+- Close the pinned publication source on parent-pinning failure so every acquired descriptor is released on every exit path.
+- Remove the native loader's PATH-resolved `ldd` execution. Linux libc detection now uses the Node process report, conventional musl library filenames, and the Node executable's ELF interpreter without spawning a process at import time; an inconclusive probe conservatively attempts glibc and falls back normally in `auto` mode.
+- Default archive extraction to `entryModes: "clamp"`, normalizing directories to `0o755` and files to `0o644` or `0o755` while always stripping setuid, setgid, and sticky bits; use `"preserve"` to retain safe archived rwx bits.
+- Prefer native create-only commits, sidecar acquisition, hardlink publication, and the explicit `rename-noreplace` publication strategy when the platform binding is available, while retaining guarded JavaScript fallbacks for `auto` and `off` modes.
+- Accelerate exclusive publication fallbacks with macOS `fclonefileat`, Linux `FICLONE` and `copy_file_range`, then the unchanged JavaScript byte loop; all paths retain exclusive creation, identity fencing, mode normalization, and SHA-256 verification through an async native hash task when available.
+- Add direct Windows owner/DACL inspection and protected private-directory creation for the current owner, LocalSystem, and Administrators, while retaining the existing .NET/`icacls` behavior when native mode is unavailable, forced off, or encounters an unsupported descriptor form.
+- Keep the public private-directory creator Windows-only and native-only so POSIX pathname races or inherited ACLs cannot weaken its privacy guarantee.
+- Build Linux native opens on `openat2(RESOLVE_BENEATH | RESOLVE_NO_MAGICLINKS)`, macOS opens on an in-root `O_NOFOLLOW` component walk, and Windows opens on handle-relative `NtCreateFile` with reparse-point rejection.
+
+### Compatibility
+
+- Remove the unsound process-scoped `allowReentrant` async file-lock option and replace it with owner-scoped `reentrantOwner` for async and sync locks: only matching, explicitly defined logical owners reuse a canonical in-process lock, releases are reference-counted and idempotent, and different or absent owners contend normally. Callers that passed the boolean must either remove it or migrate intentional nesting to a per-operation owner key; `jsonStore` remains ownerless and rejects nested same-file mutations immediately.
+- Remove the persistent Python helper and its `pythonPath` configuration. Replace `configureFsSafePython`, `FS_SAFE_PYTHON_MODE`, and the OpenClaw Python aliases with `configureFsSafeNative` and `FS_SAFE_NATIVE_MODE`; 0.5 warns once and maps the former `auto`, `require`, and `off` policies solely as an upgrade bridge for shipped 0.4 consumers.
+- Add `publishFileExclusive({ strategy: "rename-noreplace" })`; this strategy requires the native helper, atomically moves the source, and never replaces an existing destination.
+
+### Docs and Tooling
+
+- Add an ordered 0.4-to-0.5 migration checklist and reconcile every new archive, native, publication, walk, lock, secret, permission, and temp-workspace contract with realistic examples and cross-links.
+- Convert the repository to a pnpm workspace, test the Rust crate on Linux, macOS, and Windows, and publish all platform bindings, the native loader, and the root package through one protected-tag release pipeline with npm provenance.
+- Replace unused napi-rs Android, FreeBSD, OpenHarmony, WASI, and unsupported-architecture loader branches with a checked-in loader for the seven packages actually published, and make publication benchmarks report the exercised clone/copy/JavaScript tier plus filesystem environment.
+
+## 0.4.7 - 2026-07-24
+
+### Features
+
+- Add `@openclaw/fs-safe/durability` with identity-pinned directory handles,
+  explicit strict sync outcomes, synchronous and best-effort variants, and
+  durable nested-directory creation through every new parent edge.
+
+### Security and Correctness
+
+- Reject final symlinks, FIFOs, non-directories, canonical-path drift, and
+  descriptor/path identity replacement before or after directory sync.
+- Propagate POSIX directory synchronization failures while classifying known
+  unsupported Windows directory flushing only after revalidating the target;
+  directory-open access failures remain strict.
+- Route sibling-temp, root, and pinned-write best-effort parent synchronization
+  through the shared guarded primitive instead of maintaining divergent implementations.
+
+### Docs and Tooling
+
+- Document directory receipts, pin lifecycle, platform outcomes, custom
+  creation callbacks, and the boundary between filesystem durability and
+  application commit protocols.
+
+## 0.4.6 - 2026-07-24
+
+### Highlights
+
+- Reject foreign-owned or unverifiable Windows files in secure reads while
+  preserving supported trusted local owners and exact extended drive paths.
+
+### Security and Correctness
+
+- Report Windows owner SIDs and whether the owner is the current user,
+  LocalSystem, or built-in Administrators so credential-bearing executable
+  checks can reject foreign-owned paths even when their visible DACL is
+  read-only. Secure reads enforce the result and remote filesystems fail
+  closed.
+- Read Windows owner and DACL data through the underlying .NET security
+  descriptor APIs so verification does not depend on PowerShell security-module
+  autoloading.
+- Invoke `icacls.exe` with its supported path-only inspection syntax and use
+  the live Windows user/domain environment for named ACE classification, so
+  ACL verification works on supported Windows hosts instead of failing on the
+  invalid `/sid` argument.
+- Normalize trailing Windows install-root separators with a bounded linear
+  scan so library-provided environment maps cannot trigger regex backtracking.
+
+### Docs and Tooling
+
+- Add the public repository governance baseline, pinned CodeQL analysis,
+  package tarball/import validation, and protected tag-driven npm trusted
+  publishing with provenance and changelog-derived GitHub releases.
+- Let tag-driven publishing continue from an expected registry miss into npm
+  trusted publishing instead of exiting before the publish attempt.
+- Publish the generated tarball through an explicit relative path so npm treats
+  it as a local artifact instead of GitHub repository shorthand.
+
+## 0.4.5 - 2026-07-20
+
+### Highlights
+
+- Preserve sidecar-lock ownership across filesystem identity drift without weakening legacy stale-lock checks.
+
+### Security and Correctness
+
+- Give new sidecar locks an internal random ownership token outside the parsed JSON payload so release remains ownership-checked when virtual filesystems report different descriptor and pathname identities, while legacy locks retain the stricter identity-plus-content check.
+
+## 0.4.4 - 2026-07-18
+
+### Security and Correctness
+
+- Restore opt-in stale sidecar recovery with an exclusive reclaim guard that serializes snapshot verification and unlink, preserving dead-owner recovery without allowing a competing reclaimer to delete a fresh replacement lock.
+
+## 0.4.3 - 2026-07-18
+
+### Compatibility
+
+- Restore the pre-0.4.2 `readRegularFile` and `readRegularFileSync` overflow error message while retaining allocation-bounded reads and the structured `too-large` error on the new low-level bounded-read primitives.
+
+## 0.4.2 - 2026-07-18
+
+### Features
+
+- Add bounded async/sync reads for already-open file descriptors and handles, plus optional byte caps for standalone JSON readers.
+
+### Security and Correctness
+
+- Make capped root, regular-file, secure-file, secret-file, structured JSON, and synchronous store reads incremental so a file that grows after validation cannot trigger an unbounded allocation.
+- Disable `remove-if-unchanged` stale sidecar deletion because a pathname identity check followed by unlink can delete a replacement lock; retain the deprecated recovery inputs for compatibility while all stale locks fail closed.
+
+### Compatibility
+
+- Treat `EPERM` from pinned-write file and directory `fsync` calls as best effort for filesystems that permit the write but reject explicit synchronization.
+
+## 0.4.1 - 2026-07-01
+
+### Security and Correctness
+
+- Update the optional TAR extractor to reject NUL-terminated PAX values, invalid negative entry sizes, and explosive decompression payloads.
+
+### Compatibility
+
+- Add explicit `renameIdentity: "verify-content-with-lock"` writes for rclone-style FUSE mounts whose inode identity changes across rename, while keeping strict identity verification as the default and failing closed on stale cooperative locks. (#32, #33; thanks @jlautman)
+
+## 0.4.0 - 2026-06-17
+
+### Features
+
+- Report unreadable walk roots and subdirectories through `failedDirs` from `walkDirectory()` and `walkDirectorySync()`, preserving readable results while letting destructive reconciliation distinguish incomplete scans from empty directories. (#29; thanks @amknight)
+
+### Compatibility
+
+- Require Node.js 22 or newer for the npm package and docs, matching the maintained CI matrix.
+
+### Security and Correctness
+
+- Fall back to the existing copy/remove move path when Windows denies directory renames with `EPERM`, preserving skill updates while watched files are locked. (#27; thanks @liuxingwei0601)
+- Sync `root.append` file handles before close and sync the parent directory when append creates a file, preserving append-mode concurrency while improving durability. (#21; thanks @KumarAnandSingh)
+- Reject known unsafe device and process-fd read paths before opening files, including `/dev/zero`, `/dev/random`, `/dev/fd/*`, `/proc/*/fd/*`, and Windows reserved device names.
+
+## 0.3.0 - 2026-05-21
+
+### Features
+
+- Add opt-in `denyMutations` policies with exact `paths` and subtree `prefixes` so callers can protect application-sensitive files from root write, copy, move, remove, mkdir, and writable-open operations. (#20; thanks @amknight)
+
+### Security and Correctness
+
+- Retry async JSON reads (`readJson`, `readJsonIfExists`, `tryReadJson`) up to five attempts with 50ms exponential backoff when the file is rotated mid-read by an atomic rename, and tag the underlying race as `FsSafeError("path-mismatch")` so callers can distinguish transient swaps from corruption. (#19; thanks @yetval)
+
+## 0.2.7 - 2026-05-20
+
+### Security and Correctness
+
+- Restore best-effort Node write fallbacks when the Python helper is disabled or unavailable, preserving the `mode: "off"` contract while documenting the weaker POSIX same-UID race resistance compared with fd-relative helper commits.
+- Harden DeepSec-reported archive staging and input pinning, secret and queue hardlink rejection, absolute output file validation, sidecar lock read failures, ClawSweeper dispatch trust checks, and scoped path defaults.
+
+## 0.2.6 - 2026-05-17
+
+### Security and Correctness
+
+- Harden DeepSec-reported temp path handling, private secret writes, pinned helper commits, fallback mkdir writes, and dot-prefixed root relative paths against symlink, race, and relative-path edge cases.
+
+## 0.2.5 - 2026-05-16
+
+### Security and Correctness
+
+- Reject Windows drive-letter paths on POSIX secure-file reads, missing path fallbacks under symlinked parents, swapped archive destination roots, broad domain ACL principals, and hardlinked sync store reads.
+- Preserve top-level JSON `null` values in JSON stores and reject non-document JSON values such as top-level `undefined` before replacing files.
+- Fix timeout error factories, root-relative path resolution at filesystem roots, dot-prefixed child names in root path helpers, durable queue directory modes, and pinned helper stale-worker events.
+
+### Build
+
+- Clean `dist` before package builds and make prepack fail deterministically when dependencies are missing instead of resolving new toolchain versions at publish time.
+
+### Tests
+
+- Added Clawpatch regression coverage for secure reads, path fallback validation, sync stores, archive destination races, Windows ACL classification, JSON writes/stores, durable queue modes, root create no-clobber behavior, and pinned helper worker replacement.
+
+## 0.2.4 - 2026-05-14
+
+### Features
+
+- Add opt-in `remove-if-unchanged` stale lock recovery so callers can centralize compare-and-remove mechanics while keeping application-owned stale-owner policy.
+
+## 0.2.3 - 2026-05-14
+
+### Fixes
+
+- Classify broad Windows ACL identities such as Anonymous Logon, Guests, Interactive, Local, and Network as world-equivalent so writable paths are not downgraded to group-writable findings.
+
+## 0.2.2 - 2026-05-11
+
+### Fixes
+
+- Fall back to Node path guards for root stat and list operations on Windows, where the pinned Python helper is intentionally unsupported.
+
+## 0.2.1 - 2026-05-08
+
+### Fixes
+
+- Align POSIX and Windows handling for literal `..`-prefixed write targets, preserve whitespace in direct home-relative path inputs, and run the check suite on Windows CI. (#14; thanks @sjf)
+- Keep source prepack builds isolated from parent monorepo ambient type packages such as Bun typings. (#13; thanks @Kaspre)
+- Let secret-file reads follow symlink paths through the pinned real target unless callers opt into `rejectSymlink: true`.
+
+## 0.2.0 - 2026-05-07
+
+### Features
+
+- Add `writeExternalFileWithinRoot()` for libraries that require an output path while preserving caller-provided destination names. (#7; thanks @jesse-merhi)
+- Add root JSON helpers and durable JSON queue helpers for file-backed work queues with pending, delivered, failed, and acknowledgement flows.
+- Add `ensureAbsoluteDirectory()` for creating trusted absolute directory paths one segment at a time while rejecting symlink and non-directory components. (#12; thanks @jesse-merhi)
+- Add a `durable: false` option to async atomic text and JSON writes so callers can preserve replace semantics while skipping temp-file and parent-directory fsync. (#9; thanks @sallyom)
+- Add process-wide sidecar lock defaults while keeping JSON store locking opt-in per resource.
+
+### Security and Correctness
+
+- Harden Root fallback mutators, archive merges, private store reads/writes, durable queue ids, JSON fallback writes, sibling temp writes, temp filename sanitization, and trash moves against symlink-swap and path traversal edge cases.
+- Centralize safe path segment validation, directory identity guards, guarded mkdir, and guarded mutation wrappers so filesystem helpers reuse the same race-resistant checks.
+- Route archive ZIP staging, temp workspace sync reads, secret-file commits, and atomic move/replace fallbacks through shared pinned-read or guarded-write primitives without applying private-directory modes to public paths.
+- Close guarded fallback write handles without following path names if post-write directory verification fails, avoiding descriptor leaks and unsafe cleanup in symlink-swap races.
+- Harden temp filename prefixes, local-root reads, private store imports, durable queue reads, and regular-file byte caps against Deepsec-reported path traversal, symlink, and oversized-read races.
+- Harden sidecar lock cleanup and stale-lock handling so stale third-party locks fail closed instead of being deleted by path.
+
+### Compatibility
+
+- Make cross-device move fallbacks reject source changes during staged copies and clean up only the source entries copied into the staged destination, preserving concurrent source additions or replacements instead of recursively deleting them.
+- Preserve directory modes during cross-device directory moves.
+- Preserve empty-directory pruning and broken-symlink trash moves across guarded fallback paths.
+- Preserve sync file-store read policy errors for directory and hardlink validation failures.
+- Preserve existing temp workspace leaf filename behavior for names such as `.env` and filenames containing spaces.
+- Preserve public parent-directory modes when writing JSON, moving files across devices, and extracting archives.
+- Make `prepack` portable on Windows and add the missing pnpm workspace `packages` field so package preparation succeeds consistently.
+
+### Tests
+
+- Added regression coverage for the filesystem race and traversal findings fixed in this release.
+- Added Deepsec regression coverage for unsafe temp tokens, dangling symlinks, default read caps, private `copyIn()` races, symlinked queue entries, oversized queue entries, and fresh sidecar lock preservation.
+- Added regression coverage for external-output traversal rejection, guarded cleanup, sidecar lock stale handling, move fallback cleanup, durable queue validation, sync read policy failures, and absolute-directory validation.
+- Added a static filesystem-boundary primitive check that blocks reintroducing known raw copy/read/guard patterns.
+
+### Docs and Tooling
+
+- Added docs for external output writers, durable JSON queue helpers, sidecar lock defaults, boundary guardrails, and absolute-directory creation.
+- Enable ClawSweeper dispatch for pull-request review automation.
+
+## 0.1.2 - 2026-05-06
+
+### Fixes
+
+- Reject `fileStore()` and `fileStoreSync()` writes through symlinked parent directories so store commits cannot escape the configured root.
+
+### Tests
+
+- Increased filesystem edge coverage around secure temp fallback handling, sibling-temp cleanup, local-root resolution, file locks, and file identity checks.
+- Prevented POSIX test runs from leaving Windows-style secure-temp fallback paths in the repository root.
+
+### Docs
+
+- Added missing docs pages for `@openclaw/fs-safe/config`, `@openclaw/fs-safe/store`, `@openclaw/fs-safe/advanced`, and `@openclaw/fs-safe/test-hooks`.
+- Corrected path-helper docs for the synchronous `isPathInsideWithRealpath` and `safeRealpathSync` behavior.
+- Included the Markdown docs in the npm package so README links resolve after install.
+
+## 0.1.1 - 2026-05-06
+
+### Fixes
+
+- Preserve the caller's destination path spelling during staged archive merges so symlink-rebind checks catch alias races on macOS.
+- Reject archive writes that gain a hardlink alias during post-write verification and clean up the destination file.
+
+## 0.1.0 - 2026-05-06
+
+### Features
+
+- Added `root()` capability-style filesystem handles for root-bounded reads, writes, appends, moves, copies, directory listing, stat, mkdir, remove, JSON, streams, and existence checks.
+- Added traversal, symlink, hardlink, alias, and post-open/post-write identity checks for untrusted relative paths.
+- Added process-global Python helper configuration for stronger POSIX fd-relative mutation paths, with `auto`, `off`, and `require` modes.
+- Added atomic file and directory replacement helpers with mode control, fsync options, retry handling, and copy-fallback behavior.
+- Added JSON helpers, `fileStore()`, `jsonStore()`, private store mode, and file-backed temporary workspaces.
+- Added secure absolute file reads, secret-file helpers, permissions inspection, Windows ACL helpers, and local-root readers.
+- Added archive extraction and preflight helpers for ZIP/TAR with optional `jszip` and `tar` dependencies, size/count/path/link limits, and staged destination writes.
+- Added file locks, async locks, bounded directory walking, install-path sanitizers, filename sanitization, regular-file helpers, trash moves, and advanced composition helpers.
+- Added OpenClaw bypass-parity coverage, API coverage, a benchmark workflow, docs site generation, security docs, and coverage CI.

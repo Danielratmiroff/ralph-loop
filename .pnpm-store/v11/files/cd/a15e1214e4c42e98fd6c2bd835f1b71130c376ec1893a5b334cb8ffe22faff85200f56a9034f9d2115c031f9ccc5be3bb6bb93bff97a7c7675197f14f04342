@@ -1,0 +1,73 @@
+import fsSync from "node:fs";
+import fs from "node:fs/promises";
+import { readFileHandleBounded } from "./bounded-read.js";
+import { assertNoUnsafeDeviceReadPath } from "./device-path.js";
+import { FsSafeError } from "./errors.js";
+import { resolveReadOpenFlags } from "./read-open-flags.js";
+import { inspectFileIdentity } from "./strict-file-identity.js";
+import { assertSecretFilePreview, resolveSecretReadPolicy, secretPathErrorCode, secretReadError, trimSecretFileContent, } from "./secret-read-policy.js";
+export async function readSecretFile(filePath, label, options = {}) {
+    const { resolvedPath, maxBytes } = resolveSecretReadPolicy(filePath, label, options);
+    async function inspectInput(symlinkMessage) {
+        const stat = options.rejectSymlink
+            ? fsSync.lstatSync(resolvedPath, { bigint: true })
+            : fsSync.statSync(resolvedPath, { bigint: true });
+        if (options.rejectSymlink && stat.isSymbolicLink()) {
+            throw new FsSafeError("symlink", symlinkMessage);
+        }
+        return stat;
+    }
+    let previewStat;
+    try {
+        assertNoUnsafeDeviceReadPath(resolvedPath);
+        previewStat = await inspectFileIdentity(() => inspectInput(`${label} file at ${resolvedPath} must not be a symlink.`));
+    }
+    catch (error) {
+        throw secretReadError(error instanceof FsSafeError ? error.code : secretPathErrorCode(error), "inspect", label, resolvedPath, error);
+    }
+    assertSecretFilePreview(previewStat, label, resolvedPath, maxBytes, options.rejectHardlinks !== false);
+    let handle;
+    let raw;
+    try {
+        const realPath = fsSync.realpathSync.native(resolvedPath);
+        assertNoUnsafeDeviceReadPath(realPath);
+        handle = await fs.open(realPath, resolveReadOpenFlags());
+        const openedHandle = handle;
+        const openedStat = await inspectFileIdentity(async () => {
+            const stat = fsSync.fstatSync(openedHandle.fd, { bigint: true });
+            if (!stat.isFile() || (options.rejectHardlinks !== false && stat.nlink > 1n)) {
+                throw new FsSafeError("path-mismatch", "security validation failed");
+            }
+            return stat;
+        }, previewStat);
+        await inspectFileIdentity(async () => {
+            const stat = fsSync.lstatSync(realPath, { bigint: true });
+            if (!stat.isFile())
+                throw new FsSafeError("path-mismatch", "security validation failed");
+            return stat;
+        }, openedStat);
+        await inspectFileIdentity(() => inspectInput("secret path became a symlink"), openedStat);
+        raw = (await readFileHandleBounded(handle, maxBytes)).toString("utf8");
+    }
+    catch (error) {
+        throw secretReadError(error instanceof FsSafeError
+            ? error.code
+            : secretPathErrorCode(error) === "not-found" ? "not-found" : "read-failed", "read", label, resolvedPath, error);
+    }
+    finally {
+        await handle?.close().catch(() => undefined);
+    }
+    return trimSecretFileContent(raw, label, resolvedPath);
+}
+export async function tryReadSecretFile(filePath, label, options = {}) {
+    if (!filePath?.trim())
+        return undefined;
+    try {
+        return await readSecretFile(filePath, label, options);
+    }
+    catch (error) {
+        if (error instanceof FsSafeError && error.code === "not-found")
+            return undefined;
+        throw error;
+    }
+}

@@ -1,0 +1,19 @@
+import { type ExtractionDeadline } from "./archive-deadline.js";
+export type ArchivePublicationEntry = {
+    path: string;
+    kind: "file" | "directory";
+    mode: number;
+};
+type MergeParams = {
+    sourceDir: string;
+    destinationDir: string;
+    destinationRealDir: string;
+    deadline?: ExtractionDeadline;
+};
+export declare function mergePlannedArchiveIntoDestination(params: MergeParams & {
+    entries: readonly ArchivePublicationEntry[];
+    durable?: boolean;
+}): Promise<void>;
+export declare function mergeExtractedTreeIntoDestination(params: MergeParams): Promise<void>;
+export {};
+//# sourceMappingURL=archive-merge.d.ts.map

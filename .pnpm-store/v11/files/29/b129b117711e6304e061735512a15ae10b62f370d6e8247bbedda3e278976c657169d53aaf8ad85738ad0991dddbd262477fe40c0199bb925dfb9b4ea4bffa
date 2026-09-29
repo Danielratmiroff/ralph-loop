@@ -1,0 +1,2 @@
+export declare function readZipCentralDirectoryEntryCount(buffer: Buffer | Uint8Array): number | null;
+//# sourceMappingURL=archive-zip-count.d.ts.map

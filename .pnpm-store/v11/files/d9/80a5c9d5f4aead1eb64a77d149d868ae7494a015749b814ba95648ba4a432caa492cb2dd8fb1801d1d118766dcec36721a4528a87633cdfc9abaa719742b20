@@ -1,0 +1,51 @@
+import syncFs, { type BigIntStats } from "node:fs";
+import fs, { type FileHandle } from "node:fs/promises";
+import { type DirectoryModeOwner } from "./directory-mode-owner.js";
+type AsyncTempFileSystem = Pick<typeof fs, "lstat" | "open" | "writeFile">;
+type SyncTempFileSystem = Pick<typeof syncFs, "closeSync" | "fstatSync" | "fsyncSync" | "lstatSync" | "openSync" | "writeFileSync">;
+export type SyncFchmod = (fd: number, mode: number) => void;
+export declare function syncDirectoryBestEffort(fsModule: Pick<typeof fs, "open">, dirPath: string): Promise<void>;
+export declare function syncDirectoryBestEffortSync(fsModule: Pick<typeof syncFs, "openSync" | "fsyncSync" | "closeSync">, dirPath: string): void;
+export declare function pinDirectoryForMode(params: {
+    fsModule: AsyncTempFileSystem;
+    dirPath: string;
+    /** Compatibility for best-effort directory modes; admission and close still fail closed. */
+    ignoreChmodError?: boolean;
+}): Promise<DirectoryModeOwner | undefined>;
+export declare function applyDirectoryMode(params: {
+    fsModule: AsyncTempFileSystem;
+    dirPath: string;
+    mode: number;
+    ignoreChmodError?: boolean;
+}): Promise<void>;
+export declare function applyDirectoryModeSync(params: {
+    fsModule: SyncTempFileSystem;
+    dirPath: string;
+    mode: number;
+    fchmodSync?: SyncFchmod;
+}): void;
+export declare function writeTempFile(params: {
+    fsModule: AsyncTempFileSystem;
+    tempPath: string;
+    content: string | Uint8Array;
+    mode: number;
+    sync: boolean;
+    onIdentity?: (identity: BigIntStats) => void;
+}): Promise<{
+    handle: FileHandle;
+    identity: BigIntStats;
+}>;
+export declare function writeTempFileSync(params: {
+    fsModule: SyncTempFileSystem;
+    tempPath: string;
+    content: string | Uint8Array;
+    mode: number;
+    fchmodSync?: SyncFchmod;
+    sync: boolean;
+    onIdentity?: (identity: BigIntStats) => void;
+}): {
+    fd: number;
+    identity: BigIntStats;
+};
+export {};
+//# sourceMappingURL=replace-file-descriptor.d.ts.map

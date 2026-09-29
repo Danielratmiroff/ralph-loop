@@ -1,0 +1,2 @@
+export declare function validatePinnedOperationPayload(payload: Record<string, unknown>): void;
+//# sourceMappingURL=pinned-operation.d.ts.map

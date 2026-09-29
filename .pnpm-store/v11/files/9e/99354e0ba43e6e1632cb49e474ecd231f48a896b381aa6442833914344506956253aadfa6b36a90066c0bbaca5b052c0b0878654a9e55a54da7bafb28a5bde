@@ -1,0 +1,6 @@
+export declare function inheritWriteTargetMode(params: {
+    targetPath: string;
+    rootWithSep: string;
+    requestedMode?: number;
+}): Promise<number>;
+//# sourceMappingURL=root-write-mode.d.ts.map

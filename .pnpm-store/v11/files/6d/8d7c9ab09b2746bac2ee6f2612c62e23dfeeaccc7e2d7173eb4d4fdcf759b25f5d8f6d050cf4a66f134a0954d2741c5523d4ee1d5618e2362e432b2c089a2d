@@ -1,0 +1,16 @@
+import type { DirectoryReceipt } from "./directory-durability.js";
+import type { FileIdentityStat } from "./file-identity.js";
+import type { StagedFileReceipt } from "./staged-file-types.js";
+type DirectorySnapshot = StagedFileReceipt["directory"];
+export declare function exactIdentityMatches(expected: FileIdentityStat, actual: Readonly<{
+    dev: bigint;
+    ino: bigint;
+}>): boolean;
+export declare function describeStagedDirectory(fd: number, pathname: string): DirectorySnapshot;
+export declare function assertStagedDirectoryCurrent(receipt: DirectorySnapshot): void;
+export declare function openStagedDirectory(directory: string | DirectoryReceipt): {
+    fd: number;
+    receipt: DirectorySnapshot;
+};
+export {};
+//# sourceMappingURL=staged-directory.d.ts.map

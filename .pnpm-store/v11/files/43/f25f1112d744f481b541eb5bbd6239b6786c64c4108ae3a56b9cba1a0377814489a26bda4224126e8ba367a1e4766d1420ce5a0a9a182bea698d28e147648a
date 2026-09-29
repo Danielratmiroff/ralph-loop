@@ -1,0 +1,15 @@
+export declare function writeCallbackSibling<T>(params: {
+    tempPath: string;
+    write: (tempPath: string) => Promise<T>;
+    resolveFinalPath: (result: T) => string;
+    mode?: number;
+    /** Preserve the caller's historical best-effort mode behavior. */
+    ignoreModeError?: boolean;
+    maxBytes?: number;
+    syncTempFile: boolean;
+    syncParentDir: boolean;
+}): Promise<{
+    filePath: string;
+    result: T;
+}>;
+//# sourceMappingURL=sibling-staged-file.d.ts.map

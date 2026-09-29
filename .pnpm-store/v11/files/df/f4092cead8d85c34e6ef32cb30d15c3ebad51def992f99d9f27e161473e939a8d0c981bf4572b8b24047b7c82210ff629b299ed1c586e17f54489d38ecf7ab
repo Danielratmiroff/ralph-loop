@@ -1,0 +1,2 @@
+export declare function classifyArchiveParserError(message: string, options?: ErrorOptions): Error | undefined;
+//# sourceMappingURL=archive-parser-errors.d.ts.map

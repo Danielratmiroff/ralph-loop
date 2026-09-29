@@ -1,0 +1,29 @@
+import { type PermissionCommandFailure } from "./permission-exec.js";
+export type WindowsOwnerExec = (command: string, args: string[]) => Promise<{
+    stdout: string;
+    stderr: string;
+}>;
+export type WindowsOwnerSummary = {
+    sid?: string;
+    currentUserSid?: string;
+    daclPresent?: boolean;
+    aces?: WindowsOwnerAce[];
+    aclError?: string;
+    remote?: boolean;
+    trusted?: boolean;
+    error?: string;
+    errorDetail?: PermissionCommandFailure;
+    errorCause?: unknown;
+};
+export type WindowsOwnerAce = {
+    sid: string;
+    mask: number;
+    deny: boolean;
+    inheritOnly: boolean;
+};
+export declare function inspectWindowsOwner(params: {
+    targetPath: string;
+    env?: NodeJS.ProcessEnv;
+    exec: WindowsOwnerExec;
+}): Promise<WindowsOwnerSummary>;
+//# sourceMappingURL=windows-owner.d.ts.map

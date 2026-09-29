@@ -1,0 +1,21 @@
+import { type BigIntStats, type Stats } from "node:fs";
+import type { ContainmentGuarantee } from "./containment.js";
+import type { PinnedWriteInput } from "./pinned-write.js";
+export type NativeFileHandle = {
+    readonly fd: number;
+    readonly containment: ContainmentGuarantee;
+    close(): Promise<void>;
+    stat(): Promise<Stats>;
+    writeFile(data: string | Buffer, encoding?: BufferEncoding): Promise<void>;
+};
+export declare function nativeOpenFlags(flags: number): number;
+export declare function writeNativeFd(fd: number, data: Buffer): void;
+export declare function writeNativeInput(fd: number, input: PinnedWriteInput, maxBytes?: number, assertBeforeMutation?: () => void): Promise<void>;
+export declare function removeNativeCreatedFileIfStillPinned(params: {
+    parentPath: string;
+    parentFd: number;
+    basename: string;
+    created?: BigIntStats;
+}): void;
+export declare function createNativeExclusiveFile(targetPath: string, mode: number): Promise<NativeFileHandle | undefined>;
+//# sourceMappingURL=native-operations.d.ts.map

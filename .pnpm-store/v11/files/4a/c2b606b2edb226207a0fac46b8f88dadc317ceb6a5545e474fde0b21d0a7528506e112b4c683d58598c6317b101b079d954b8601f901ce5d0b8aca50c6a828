@@ -1,0 +1,74 @@
+import { execFile } from "node:child_process";
+import path from "node:path";
+import { promisify } from "node:util";
+import { formatErrorDetail } from "./error-detail.js";
+const execFileAsync = promisify(execFile);
+export const DEFAULT_PERMISSION_EXEC_TIMEOUT_MS = 30_000;
+export function formatPermissionErrorDetail(value) {
+    const formatted = formatErrorDetail(value);
+    return formatted.length > 400 ? `${formatted.slice(0, 399)}…` : formatted;
+}
+function commandFailureFields(error) {
+    const fields = error && typeof error === "object" ? error : {};
+    return {
+        timedOut: "killed" in fields && fields.killed === true &&
+            "signal" in fields && fields.signal === "SIGKILL",
+        exitCode: "code" in fields && typeof fields.code === "number" ? fields.code : null,
+        signal: "signal" in fields && typeof fields.signal === "string" ? fields.signal : null,
+        stderr: formatPermissionErrorDetail("stderr" in fields && (typeof fields.stderr === "string" || Buffer.isBuffer(fields.stderr))
+            ? fields.stderr.toString() : ""),
+    };
+}
+export class PermissionCommandError extends Error {
+    command;
+    durationMs;
+    timedOut;
+    exitCode;
+    signal;
+    stderr;
+    constructor(command, durationMs, cause, timeoutMs = DEFAULT_PERMISSION_EXEC_TIMEOUT_MS) {
+        const fields = commandFailureFields(cause);
+        super(fields.timedOut
+            ? `Windows permission inspection timed out after ${timeoutMs}ms`
+            : `Windows permission command ${formatPermissionErrorDetail(path.win32.basename(command))} failed (exit code ${fields.exitCode}, signal ${formatPermissionErrorDetail(fields.signal ?? "none")})`, { cause });
+        this.name = "PermissionCommandError";
+        this.command = command;
+        this.durationMs = Math.round(durationMs);
+        this.timedOut = fields.timedOut;
+        this.exitCode = fields.exitCode;
+        this.signal = fields.signal;
+        this.stderr = fields.stderr;
+    }
+}
+export function getPermissionCommandFailure(error, command, durationMs) {
+    if (error instanceof PermissionCommandError) {
+        return {
+            command: error.command,
+            durationMs: error.durationMs,
+            timedOut: error.timedOut,
+            exitCode: error.exitCode,
+            signal: error.signal,
+            stderr: error.stderr,
+        };
+    }
+    if (!error || typeof error !== "object" ||
+        !("code" in error || "signal" in error || "killed" in error || "stderr" in error)) {
+        return undefined;
+    }
+    return { command, durationMs: Math.round(durationMs), ...commandFailureFields(error) };
+}
+export async function executePermissionCommand(command, args, timeoutMs = DEFAULT_PERMISSION_EXEC_TIMEOUT_MS) {
+    const startedAt = performance.now();
+    try {
+        return (await execFileAsync(command, args, {
+            encoding: "utf8",
+            windowsHide: true,
+            maxBuffer: 1024 * 1024,
+            timeout: timeoutMs,
+            killSignal: "SIGKILL",
+        }));
+    }
+    catch (err) {
+        throw new PermissionCommandError(command, performance.now() - startedAt, err, timeoutMs);
+    }
+}

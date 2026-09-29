@@ -1,0 +1,7 @@
+type ResolveSymlinkHopOptions = {
+    rejectUnresolved?: boolean;
+};
+export declare function resolveSymlinkHopPath(symlinkPath: string, options?: ResolveSymlinkHopOptions): Promise<string>;
+export declare function resolveSymlinkHopPathSync(symlinkPath: string, options?: ResolveSymlinkHopOptions): string;
+export {};
+//# sourceMappingURL=root-path-symlink.d.ts.map

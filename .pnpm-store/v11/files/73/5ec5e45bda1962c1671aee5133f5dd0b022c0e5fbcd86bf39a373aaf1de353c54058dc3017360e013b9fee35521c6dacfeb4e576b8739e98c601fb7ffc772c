@@ -1,0 +1,100 @@
+import { classifyArchiveParserError } from "./archive-parser-errors.js";
+import { readFileSync } from "node:fs";
+import { Transform } from "node:stream";
+import { ArchiveFormatError } from "./archive-errors.js";
+// Node exposes WebAssembly without DOM globals; keep the private ABI types local.
+const wasm = globalThis.WebAssembly;
+let compiled;
+function instance() {
+    // src tests and dist consumers resolve the same generated package artifact.
+    compiled ??= new wasm.Module(readFileSync(new URL("../dist/archive-parser.wasm", import.meta.url)));
+    if (wasm.Module.imports(compiled).length)
+        throw new Error("TAR WASM unexpectedly requires host imports");
+    return new wasm.Instance(compiled).exports;
+}
+const types = new Map([
+    [0, "File"], [48, "File"], [49, "Link"], [50, "SymbolicLink"],
+    [51, "CharacterDevice"], [52, "BlockDevice"], [53, "Directory"],
+    [54, "FIFO"], [55, "ContiguousFile"], [68, "GNUDumpDir"],
+]);
+const utf8Decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+function parserError(message) {
+    const mapped = classifyArchiveParserError(message);
+    if (mapped)
+        return mapped;
+    return new ArchiveFormatError(message.replace(/^archive-header-invalid:/, "invalid TAR header:"));
+}
+/** Backpressure-aware transport only; all TAR semantics live in the Rust core. */
+export class TarParserStream extends Transform {
+    onMember;
+    abi;
+    constructor(limits, onMember) {
+        super();
+        this.onMember = onMember;
+        this.abi = instance();
+        if (this.abi.init(limits.maxEntries, limits.maxMetaEntryBytes, limits.maxDecodedBytes, limits.maxManifestBytes, Number(process.platform === "win32")) !== 0) {
+            this.abi.dispose();
+            this.abi = undefined;
+            throw new RangeError("invalid TAR parser limits");
+        }
+    }
+    bytes(pointer, length) {
+        const memory = this.abi.memory.buffer;
+        if (!Number.isInteger(pointer) || !Number.isInteger(length) || pointer < 0 || length < 0 ||
+            pointer > memory.byteLength || length > memory.byteLength - pointer) {
+            throw new ArchiveFormatError("invalid TAR WASM memory range");
+        }
+        return new Uint8Array(memory, pointer, length);
+    }
+    text() {
+        const abi = this.abi;
+        return utf8Decoder.decode(this.bytes(abi.text_ptr(), abi.text_len()));
+    }
+    _transform(chunk, _encoding, callback) {
+        try {
+            const abi = this.abi;
+            for (let offset = 0; offset < chunk.length;) {
+                const length = Math.min(65536, chunk.length - offset);
+                this.bytes(abi.input_ptr(), length).set(chunk.subarray(offset, offset + length));
+                const used = abi.push(length);
+                if (used < 0)
+                    throw parserError(this.text());
+                if (used === 0 || used > length)
+                    throw new ArchiveFormatError("TAR WASM made no progress");
+                offset += used;
+                const type = abi.member_type();
+                if (type >= 0)
+                    this.onMember?.({
+                        path: this.text(), type: types.get(type) ?? "Unsupported", size: abi.member_size(),
+                        mode: abi.member_mode(), offset: abi.member_offset(),
+                    });
+            }
+            callback(null, chunk);
+        }
+        catch (error) {
+            callback(error instanceof Error ? error : new Error(String(error)));
+        }
+    }
+    _flush(callback) {
+        try {
+            if (this.abi.finish() !== 0)
+                throw parserError(this.text());
+            callback();
+        }
+        catch (error) {
+            callback(error instanceof Error ? error : new Error(String(error)));
+        }
+    }
+    _destroy(error, callback) {
+        try {
+            this.abi?.dispose();
+        }
+        catch (cause) {
+            error ??= cause instanceof Error ? cause : new Error(String(cause));
+        }
+        finally {
+            this.abi = undefined;
+        }
+        callback(error);
+    }
+}

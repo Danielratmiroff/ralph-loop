@@ -1,0 +1,7 @@
+import type { ExtractArchiveOptions } from "./archive-options.js";
+import { type ArchivePlanEntry } from "./archive-plan.js";
+export type InspectTarArchiveOptions = Pick<ExtractArchiveOptions, "archivePath" | "timeoutMs" | "limits" | "entryFilter" | "onFiltered">;
+export type InspectedTarEntry = Readonly<Pick<ArchivePlanEntry, "path" | "kind" | "size">>;
+/** Complete TAR/gzip admission and zero-strip extraction policy, without output writes. */
+export declare function inspectTarArchive(params: InspectTarArchiveOptions): Promise<readonly InspectedTarEntry[]>;
+//# sourceMappingURL=archive-tar-inspect.d.ts.map

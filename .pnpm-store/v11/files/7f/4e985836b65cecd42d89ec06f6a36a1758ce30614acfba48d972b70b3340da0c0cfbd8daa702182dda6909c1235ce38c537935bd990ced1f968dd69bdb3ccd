@@ -1,0 +1,2 @@
+export declare function assertFileStoreMaxBytes(size: number, maxBytes?: number): void;
+//# sourceMappingURL=file-store-limit.d.ts.map
